@@ -68,11 +68,7 @@ pyaiagent = ["py.typed"]
 ## 3. Push code and tag
 #git push origin master
 #git push origin v0.1.0
-#
-## 4. Build and publish to PyPI
-#python -m build
-#twine upload dist/*
-#
+
 #Future workflow:
 #Develop on master (or use feature branches for big changes)
 #When ready to release → create a new tag (v0.2.0, etc.)
@@ -94,10 +90,10 @@ pyaiagent = ["py.typed"]
 # python -m build
 #
 # 3️⃣ Test installation:
-# pip install dist/worklet-0.1.0-py3-none-any.whl
+# pip install dist/pyaiagent-0.1.0-py3-none-any.whl
 #
 # 4️⃣ Verify:
-# python -c "import worklet; print(worklet.__version__)"
+# python -c "import pyaiagent; print(pyaiagent.__version__)"
 # Upload:
 # twine upload dist/*
 

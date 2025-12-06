@@ -172,34 +172,22 @@ class OpenAIAgent:
     def _build_static_openai_responses_api_kwargs(self) -> dict:
         """Pre-build immutable parts of API kwargs."""
         config = self._config
-        return {
-            # Model ID used to generate the response, like gpt-4o or o3.
-            # OpenAI offers a wide range of models with different capabilities, performance characteristics, and price points.
-            # Refer to the model guide to browse and compare available models.
+        kwargs = {
             "model": config.model,
-            # What sampling temperature to use, between 0 and 2.
-            # Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
-            # We generally recommend altering this or top_p but not both.
             "temperature": config.temperature,
-            # An upper bound for the number of tokens that can be generated for a response,
-            # including visible output tokens and reasoning tokens.
             "max_output_tokens": config.max_output_tokens,
-            # How the model should select which tool (or tools) to use when generating a response.
-            # none means the model will not call any tool and instead generates a message.
-            # auto means the model can pick between generating a message or calling one or more tools.
-            # required means the model must call one or more tools.
             "tool_choice": config.tool_choice,
-            # An array of tools the model may call while generating a response.
-            # You can specify which tool to use by setting the tool_choice parameter.
             "tools": self.__tools_schema__,
-            # Whether to allow the model to run tool calls in parallel.
             "parallel_tool_calls": config.parallel_tool_calls,
-            # Whether to store the generated model response for later retrieval via API.
             "store": False,
-            # If set to true, the model response data will be streamed to the client as it is generated using server-sent events.
-            # See the Streaming section below for more information.
             "stream": False,
         }
+        # Optional parameters - only include if set
+        if config.top_p is not None:
+            kwargs["top_p"] = config.top_p
+        if config.seed is not None:
+            kwargs["seed"] = config.seed
+        return kwargs
 
     async def _openai_responses_api_call(self,
                                          instruction: str,

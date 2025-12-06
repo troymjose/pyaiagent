@@ -1,6 +1,6 @@
-# pyaiagent
+# PyAiAgent
 
-A lightweight, high-performance framework for building OpenAI-powered agents in Python.
+PyAiAgent is a modern, fast (high-performance), async framework for building AI agents with pythonic code.
 
 ```python
 from pyaiagent import OpenAIAgent
@@ -171,7 +171,9 @@ class MyAgent(OpenAIAgent):
 |--------|------|---------|-------------|
 | `model` | `str` | `"gpt-4o-mini"` | OpenAI model ID |
 | `temperature` | `float` | `0.2` | Response randomness (0.0-2.0) |
+| `top_p` | `float` | `None` | Nucleus sampling (alternative to temperature) |
 | `max_output_tokens` | `int` | `4096` | Maximum tokens in response |
+| `seed` | `int` | `None` | For reproducible outputs |
 | `tool_choice` | `str` | `"auto"` | `"auto"`, `"none"`, or `"required"` |
 | `parallel_tool_calls` | `bool` | `True` | Allow multiple tools at once |
 | `max_steps` | `int` | `10` | Max tool-call rounds per request |

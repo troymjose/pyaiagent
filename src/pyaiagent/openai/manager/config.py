@@ -35,6 +35,21 @@ class OpenAIAgentConfigManager:
             errors.append(f"Field 'temperature' must be a float or int, got {type(value).__name__}.")
 
     @staticmethod
+    def _validate_top_p(value, errors):
+        if value is not None:
+            if isinstance(value, (int, float)):
+                if not (0.0 <= value <= 1.0):
+                    errors.append("Field 'top_p' must be between 0.0 and 1.0.")
+            else:
+                errors.append(f"Field 'top_p' must be a float or None, got {type(value).__name__}.")
+
+    @staticmethod
+    def _validate_seed(value, errors):
+        if value is not None:
+            if not isinstance(value, int):
+                errors.append(f"Field 'seed' must be an int or None, got {type(value).__name__}.")
+
+    @staticmethod
     def _validate_max_output_tokens(value, errors):
         if isinstance(value, int):
             if value <= 0:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Dict, Any, Type, TYPE_CHECKING, Literal
+from typing import Dict, Any, Type, Literal,TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -15,7 +15,9 @@ class OpenAIAgentConfig:
     # OpenAI LLM configuration
     model: str = "gpt-4o-mini"
     temperature: float = 0.2
+    top_p: float | None = None
     max_output_tokens: int = 4096
+    seed: int | None = None
     tool_choice: OpenAiToolChoice | Dict[str, Any] = "auto"
     parallel_tool_calls: bool = True
     text_format: Type[BaseModel] | None = None

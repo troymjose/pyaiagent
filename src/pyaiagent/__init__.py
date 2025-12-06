@@ -1,10 +1,8 @@
 """
-pyaiagent - A lightweight, high-performance framework for building OpenAI-powered agents in Python.
+PyAiAgent is a modern, fast (high-performance), async framework for building AI agents with pythonic code.
 """
 
 from pyaiagent.openai.agent import OpenAIAgent
-from pyaiagent.openai.config import OpenAIAgentConfig
-from pyaiagent.openai.exceptions.definition import OpenAIAgentDefinitionError
 from pyaiagent.openai.exceptions.process import (OpenAIAgentProcessError,
                                                  OpenAIAgentClosedError,
                                                  InvalidInputError,
@@ -19,9 +17,7 @@ from pyaiagent.openai.exceptions.process import (OpenAIAgentProcessError,
 __all__ = [
     # Core
     "OpenAIAgent",
-    "OpenAIAgentConfig",
-    # Exceptions
-    "OpenAIAgentDefinitionError",
+    # Exceptions (runtime errors)
     "OpenAIAgentProcessError",
     "OpenAIAgentClosedError",
     "InvalidInputError",
