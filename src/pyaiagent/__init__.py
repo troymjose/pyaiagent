@@ -4,19 +4,17 @@ pyaiagent - A lightweight, high-performance framework for building OpenAI-powere
 
 from pyaiagent.openai.agent import OpenAIAgent
 from pyaiagent.openai.config import OpenAIAgentConfig
-from pyaiagent.openai.exceptions import (
-    OpenAIAgentDefinitionError,
-    OpenAIAgentProcessError,
-    OpenAIAgentClosedError,
-    InvalidInputError,
-    InvalidSessionError,
-    InvalidMetadataError,
-    InvalidLlmMessagesError,
-    InvalidInstructionParamsError,
-    InstructionKeyError,
-    ClientError,
-    MaxStepsExceededError,
-)
+from pyaiagent.openai.exceptions.definition import OpenAIAgentDefinitionError
+from pyaiagent.openai.exceptions.process import (OpenAIAgentProcessError,
+                                                 OpenAIAgentClosedError,
+                                                 InvalidInputError,
+                                                 InvalidSessionError,
+                                                 InvalidMetadataError,
+                                                 InvalidLlmMessagesError,
+                                                 InvalidInstructionParamsError,
+                                                 InstructionKeyError,
+                                                 ClientError,
+                                                 MaxStepsExceededError)
 
 __all__ = [
     # Core
@@ -37,4 +35,3 @@ __all__ = [
 ]
 
 __version__ = "0.1.0"
-

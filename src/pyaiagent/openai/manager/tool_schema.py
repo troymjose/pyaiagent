@@ -108,42 +108,6 @@ class ToolSchemaManager:
         first argument. If you accidentally pass in an instance, a primitive,
         or a special typing object (like `List[int]`, `Dict[str, T]`, etc.),
         it raises a `TypeError`. This helper avoids those crashes.
-
-        Example
-        -------
-        >>> import collections.abc as cabc
-        >>> ToolSchemaManager._issubclass_safe(list, cabc.Sequence)
-        True
-        >>> ToolSchemaManager._issubclass_safe("notaclass", cabc.Mapping)
-        False
-        >>> ToolSchemaManager._issubclass_safe(123, cabc.Mapping)
-        False
-        >>> # Works safely even for typing generics
-        >>> from typing import List
-        >>> ToolSchemaManager._issubclass_safe(get_origin(List[int]), cabc.Sequence)
-        True
-
-        Notes
-        -----
-        - This function intentionally returns `False` on all errors
-          instead of re-raising them, so that type introspection in
-          `_py_type_to_json_schema()` never fails catastrophically.
-        - The `isinstance(cls, type)` check ensures we only pass real
-          class objects to `issubclass()` — this avoids `TypeError` on
-          primitives, callables, modules, etc.
-        - Because Python’s type system is dynamic and the `typing` module
-          uses non-class objects internally, such safe guards are necessary
-          for robust schema generation.
-
-        Implementation
-        --------------
-        Equivalent to:
-            try:
-                if isinstance(cls, type):
-                    return issubclass(cls, parent)
-                return False
-            except Exception:
-                return False
         """
         try:
             # Check that cls is a class object (not instance or primitive)
@@ -200,20 +164,6 @@ class ToolSchemaManager:
                   age: int
 
           This method will correctly return `True` for `User`.
-
-        Example
-        -------
-        >>> from typing import TypedDict
-        >>> class User(TypedDict):
-        ...     name: str
-        ...     age: int
-
-        >>> ToolSchemaManager._is_typed_dict(User)
-        True
-        >>> ToolSchemaManager._is_typed_dict(User(name="Alice", age=30))
-        False
-        >>> ToolSchemaManager._is_typed_dict(dict)
-        False
         """
         try:
             # `issubclass()` will raise if `t` is not a class.
@@ -266,21 +216,6 @@ class ToolSchemaManager:
         - Any exceptions raised by malformed objects or meta-class conflicts
           are caught and treated as `False`, so that this helper never breaks
           schema generation pipelines.
-
-        Example
-        -------
-        >>> from dataclasses import dataclass
-        >>> @dataclass
-        ... class User:
-        ...     name: str
-        ...     age: int
-
-        >>> ToolSchemaManager._is_dataclass_type(User)
-        True
-        >>> ToolSchemaManager._is_dataclass_type(User(name="Alice", age=30))
-        False
-        >>> ToolSchemaManager._is_dataclass_type(dict)
-        False
         """
         try:
             # Confirm it's a class type and then verify dataclass decoration.
@@ -367,16 +302,7 @@ class ToolSchemaManager:
               • `List`, `Tuple`, `Set`, `Dict`, `Mapping`, and plain built-ins (`list`, `dict`, etc.)
               • `TypedDict`
               • `dataclasses`
-        - Any unsupported or unknown type is safely represented as `"type": "string"`.
-
-        Example
-        -------
-        >>> from typing import Dict, Optional, List
-        >>> ToolSchemaManager.__py_type_to_json_schema_cached(Dict[str, int], True, None, 10, 0)
-        {'type': 'object', 'additionalProperties': {'type': 'integer'}}
-
-        >>> ToolSchemaManager.__py_type_to_json_schema_cached(Optional[List[str]], True, None, 10, 0)
-        {'anyOf': [{'type': 'array', 'items': {'type': 'string'}}, {'type': 'null'}]}
+        - Any unsupported or unknown type is safely represented as `"type": "string"
         """
 
         # -------------------------------------------------------------------------
