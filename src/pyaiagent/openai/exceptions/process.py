@@ -17,48 +17,46 @@ class OpenAIAgentProcessError(Exception):
 
 
 class OpenAIAgentClosedError(OpenAIAgentProcessError):
-    def __init__(self):
-        super().__init__("The OpenAIAgent instance has been closed and can no longer process requests.")
+    def __init__(self, *, agent_name: str = "OpenAIAgent"):
+        super().__init__(f"'{agent_name}' has been closed. Create a new instance to continue.")
 
 
 class InvalidInputError(OpenAIAgentProcessError):
-    def __init__(self):
-        super().__init__("Argument 'input' must be a string.")
+    def __init__(self, *, agent_name: str = "OpenAIAgent"):
+        super().__init__(f"'{agent_name}' requires 'input' to be a string.")
 
 
 class InvalidSessionError(OpenAIAgentProcessError):
-    def __init__(self):
-        super().__init__("Argument 'session' must be a non empty string.")
+    def __init__(self, *, agent_name: str = "OpenAIAgent"):
+        super().__init__(f"'{agent_name}' requires 'session' to be a non-empty string.")
 
 
 class InvalidMetadataError(OpenAIAgentProcessError):
-    def __init__(self):
-        super().__init__("Argument 'metadata' must be a dictionary.")
+    def __init__(self, *, agent_name: str = "OpenAIAgent"):
+        super().__init__(f"'{agent_name}' requires 'metadata' to be a dict.")
 
 
 class InvalidLlmMessagesError(OpenAIAgentProcessError):
-    def __init__(self):
-        super().__init__(
-            "Argument 'llm_messages' should be of type list. It should align with the expected format for messages in the OpenAI Response API.")
+    def __init__(self, *, agent_name: str = "OpenAIAgent"):
+        super().__init__(f"'{agent_name}' requires 'llm_messages' to be a list.")
 
 
 class InvalidInstructionParamsError(OpenAIAgentProcessError):
-    def __init__(self):
-        super().__init__(
-            "Argument 'instruction_params' should be of type dict. It should contain key-value pairs that parameterize the agent's instructions.")
+    def __init__(self, *, agent_name: str = "OpenAIAgent"):
+        super().__init__(f"'{agent_name}' requires 'instruction_params' to be a dict.")
 
 
 class InstructionKeyError(OpenAIAgentProcessError):
-    def __init__(self, message):
+    def __init__(self, *, agent_name: str, key: str):
         super().__init__(
-            f"{message} Key Missing. Argument 'instruction_params' passed to process() method should contain all required keys for instruction parameterization.")
+            f"'{agent_name}' missing instruction key {key}. Provide it via 'instruction_params' in process().")
 
 
 class ClientError(OpenAIAgentProcessError):
-    def __init__(self, message):
-        super().__init__(f"OpenAI Client Error: '{message}'")
+    def __init__(self, *, agent_name: str, message: str):
+        super().__init__(f"'{agent_name}' OpenAI API error: {message}")
 
 
 class MaxStepsExceededError(OpenAIAgentProcessError):
-    def __init__(self):
-        super().__init__("Maximum number of steps exceeded without reaching a final response.")
+    def __init__(self, *, agent_name: str = "OpenAIAgent", max_steps: int = 10):
+        super().__init__(f"'{agent_name}' exceeded {max_steps} steps without completing.")
