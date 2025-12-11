@@ -222,13 +222,13 @@ class OpenAIAgent:
             exc_msg = f"HTTP error during OpenAI call. Error: {exc}"
             if logger.isEnabledFor(logging.ERROR):
                 logger.exception(exc_msg)
-            raise ClientError(message=exc_msg) from exc
+            raise ClientError(agent_name=self.__agent_name__, message=exc_msg) from exc
 
         except Exception as exc:
             exc_msg = f"Unexpected error during OpenAI call. Error: {exc}"
             if logger.isEnabledFor(logging.ERROR):
                 logger.exception(exc_msg)
-            raise ClientError(message=exc_msg) from exc
+            raise ClientError(agent_name=self.__agent_name__, message=exc_msg) from exc
 
     async def _execute_tool_call(self, tool_call: ResponseFunctionToolCall) -> Dict[str, str]:
         async with self._semaphore:
@@ -285,7 +285,7 @@ class OpenAIAgent:
             instruction: str = self.__instruction__.format(**(instruction_params or {}))
             return instruction
         except KeyError as exc:
-            raise InstructionKeyError(str(exc))
+            raise InstructionKeyError(agent_name=self.__agent_name__, key=str(exc))
 
     async def process(self,
                       *,
@@ -296,19 +296,23 @@ class OpenAIAgent:
                       metadata: Optional[dict] = None) -> dict:
 
         if self._closed:
-            raise OpenAIAgentClosedError()
+            raise OpenAIAgentClosedError(agent_name=self.__agent_name__)
 
         # Validate input types before any processing
         if not isinstance(input, str):
-            raise InvalidInputError()
-        if session is not None and (not isinstance(session, str) or not session.strip()):
-            raise InvalidSessionError()
+            raise InvalidInputError(agent_name=self.__agent_name__, received=type(input).__name__)
+        if session is not None:
+            if not isinstance(session, str):
+                raise InvalidSessionError(agent_name=self.__agent_name__, received=type(session).__name__)
+            if not session.strip():
+                raise InvalidSessionError(agent_name=self.__agent_name__, received="empty string")
         if metadata is not None and not isinstance(metadata, dict):
-            raise InvalidMetadataError()
+            raise InvalidMetadataError(agent_name=self.__agent_name__, received=type(metadata).__name__)
         if llm_messages is not None and not isinstance(llm_messages, list):
-            raise InvalidLlmMessagesError()
+            raise InvalidLlmMessagesError(agent_name=self.__agent_name__, received=type(llm_messages).__name__)
         if instruction_params is not None and not isinstance(instruction_params, dict):
-            raise InvalidInstructionParamsError()
+            raise InvalidInstructionParamsError(agent_name=self.__agent_name__,
+                                                received=type(instruction_params).__name__)
 
         await self._ensure_ready()
 
@@ -388,7 +392,7 @@ class OpenAIAgent:
                                                                metadata=metadata))
 
         if assistant_response is None:
-            raise MaxStepsExceededError()
+            raise MaxStepsExceededError(agent_name=self.__agent_name__, max_steps=config.max_steps)
 
         return {"input": input,
                 "session": session,
@@ -417,7 +421,7 @@ class OpenAIAgent:
 
     async def __aenter__(self):
         if self._closed:
-            raise OpenAIAgentClosedError()
+            raise OpenAIAgentClosedError(agent_name=self.__agent_name__)
         await self._ensure_ready()
         return self
 
