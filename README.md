@@ -1,30 +1,61 @@
 # PyAiAgent
 
+[![PyPI version](https://img.shields.io/pypi/v/pyaiagent.svg)](https://pypi.org/project/pyaiagent/)
+[![Python versions](https://img.shields.io/pypi/pyversions/pyaiagent.svg)](https://pypi.org/project/pyaiagent/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/troymjose/pyaiagent/blob/master/LICENSE)
+<!-- [![GitHub stars](https://img.shields.io/github/stars/troymjose/pyaiagent.svg?style=social)](https://github.com/troymjose/pyaiagent) -->
+
 PyAiAgent is a modern, fast (high-performance), async framework for building AI agents with pythonic code.
 
 ```python
 from pyaiagent import OpenAIAgent
 
+
 class MyAgent(OpenAIAgent):
     """You are a helpful assistant."""
+
+
+agent = MyAgent()
 
 result = await agent.process(input="Did I just build an AI agent in 2 lines?")
 ```
 
 ---
 
+## Contents
+
+- [Why pyaiagent?](#why-pyaiagent)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Adding Tools](#adding-tools)
+- [Configuration](#configuration)
+- [Structured Output](#structured-output)
+- [Sessions and Conversation Memory](#sessions-and-conversation-memory)
+- [Dynamic Instructions](#dynamic-instructions)
+- [Inheritance and Composition](#inheritance-and-composition)
+- [Error Handling](#error-handling)
+- [Best Practices](#best-practices)
+- [API Reference](#api-reference)
+
+---
+
 ## Why pyaiagent?
 
-| Feature | pyaiagent | Other Frameworks |
-|---------|-----------|------------------|
-| Lines to define an agent | ~10 | ~50+ |
-| Learning curve | Minutes | Hours/Days |
-| Pythonic | Yes — classes, docstrings, type hints | Custom DSLs, decorators, configs |
-| Decorators needed | None | Many |
-| Async support | Native | Often bolted-on |
-| Dependencies | 2 packages | 50+ packages |
+- Minimal API – subclass OpenAIAgent, write a docstring, add async methods as tools.
+- No magic – no decorators, no YAML, no custom DSL.
+- Async‑native – designed for asyncio, FastAPI, and modern Python apps.
 
-**pyaiagent** is for developers who want to build AI agents without wrestling with complex abstractions, heavy dependencies, or verbose boilerplate.
+| Feature                  | pyaiagent                             | Other Frameworks                 |
+|--------------------------|---------------------------------------|----------------------------------|
+| Lines to define an agent | ~10                                   | ~50+                             |
+| Learning curve           | Minutes                               | Hours/Days                       |
+| Pythonic                 | Yes — classes, docstrings, type hints | Custom DSLs, decorators, configs |
+| Decorators needed        | None                                  | Many                             |
+| Async support            | Native                                | Often bolted-on                  |
+| Dependencies             | 2 packages                            | 50+ packages                     |
+
+**pyaiagent** is for developers who want to build AI agents without wrestling with complex abstractions, heavy
+dependencies, or verbose boilerplate.
 
 ---
 
@@ -87,7 +118,8 @@ asyncio.run(main())
 
 ## Adding Tools
 
-Tools are async methods on your agent class. The method name becomes the tool name, and the docstring becomes the tool description.
+Tools are async methods on your agent class. The method name becomes the tool name, and the docstring becomes the tool
+description.
 
 ```python
 from pyaiagent import OpenAIAgent
@@ -134,20 +166,20 @@ async def search_products(
 
 ### Supported Types
 
-| Python Type | JSON Schema |
-|-------------|-------------|
-| `str` | `"type": "string"` |
-| `int` | `"type": "integer"` |
-| `float` | `"type": "number"` |
-| `bool` | `"type": "boolean"` |
-| `list[str]` | `"type": "array", "items": {"type": "string"}` |
-| `dict[str, int]` | `"type": "object", "additionalProperties": {...}` |
-| `datetime` | `"type": "string", "format": "date-time"` |
-| `Literal["a", "b"]` | `"enum": ["a", "b"]` |
-| `Optional[str]` | `"anyOf": [{"type": "string"}, {"type": "null"}]` |
-| `TypedDict` | Full object schema with properties |
-| `dataclass` | Full object schema with properties |
-| `Enum` | Enum values |
+| Python Type         | JSON Schema                                       |
+|---------------------|---------------------------------------------------|
+| `str`               | `"type": "string"`                                |
+| `int`               | `"type": "integer"`                               |
+| `float`             | `"type": "number"`                                |
+| `bool`              | `"type": "boolean"`                               |
+| `list[str]`         | `"type": "array", "items": {"type": "string"}`    |
+| `dict[str, int]`    | `"type": "object", "additionalProperties": {...}` |
+| `datetime`          | `"type": "string", "format": "date-time"`         |
+| `Literal["a", "b"]` | `"enum": ["a", "b"]`                              |
+| `Optional[str]`     | `"anyOf": [{"type": "string"}, {"type": "null"}]` |
+| `TypedDict`         | Full object schema with properties                |
+| `dataclass`         | Full object schema with properties                |
+| `Enum`              | Enum values                                       |
 
 ---
 
@@ -167,20 +199,20 @@ class MyAgent(OpenAIAgent):
 
 ### All Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `model` | `str` | `"gpt-4o-mini"` | OpenAI model ID |
-| `temperature` | `float` | `0.2` | Response randomness (0.0-2.0) |
-| `top_p` | `float` | `None` | Nucleus sampling (alternative to temperature) |
-| `max_output_tokens` | `int` | `4096` | Maximum tokens in response |
-| `seed` | `int` | `None` | For reproducible outputs |
-| `tool_choice` | `str` | `"auto"` | `"auto"`, `"none"`, or `"required"` |
-| `parallel_tool_calls` | `bool` | `True` | Allow multiple tools at once |
-| `max_steps` | `int` | `10` | Max tool-call rounds per request |
-| `max_parallel_tools` | `int` | `10` | Concurrency limit for tool execution |
-| `tool_timeout` | `float` | `30.0` | Timeout per tool call (seconds) |
-| `llm_timeout` | `float` | `120.0` | Timeout for LLM response (seconds) |
-| `text_format` | `BaseModel` | `None` | Pydantic model for structured output |
+| Option                | Type        | Default         | Description                                   |
+|-----------------------|-------------|-----------------|-----------------------------------------------|
+| `model`               | `str`       | `"gpt-4o-mini"` | OpenAI model ID                               |
+| `temperature`         | `float`     | `0.2`           | Response randomness (0.0-2.0)                 |
+| `top_p`               | `float`     | `None`          | Nucleus sampling (alternative to temperature) |
+| `max_output_tokens`   | `int`       | `4096`          | Maximum tokens in response                    |
+| `seed`                | `int`       | `None`          | For reproducible outputs                      |
+| `tool_choice`         | `str`       | `"auto"`        | `"auto"`, `"none"`, or `"required"`           |
+| `parallel_tool_calls` | `bool`      | `True`          | Allow multiple tools at once                  |
+| `max_steps`           | `int`       | `10`            | Max tool-call rounds per request              |
+| `max_parallel_tools`  | `int`       | `10`            | Concurrency limit for tool execution          |
+| `tool_timeout`        | `float`     | `30.0`          | Timeout per tool call (seconds)               |
+| `llm_timeout`         | `float`     | `120.0`         | Timeout for LLM response (seconds)            |
+| `text_format`         | `BaseModel` | `None`          | Pydantic model for structured output          |
 
 ### OpenAI Client Configuration
 
@@ -191,11 +223,11 @@ The agent uses the standard OpenAI environment variables:
 export OPENAI_API_KEY="sk-..."
 
 # Optional
-export OPENAI_ORG_ID="org-..."                    # Organization ID
-export OPENAI_PROJECT_ID="proj-..."               # Project ID
+export OPENAI_ORG_ID="org-..."                      # Organization ID
+export OPENAI_PROJECT_ID="proj-..."                 # Project ID
 export OPENAI_BASE_URL="https://your-proxy.com/v1"  # Custom endpoint / proxy
-export OPENAI_TIMEOUT="60"                        # Request timeout (seconds)
-export OPENAI_MAX_RETRIES="3"                     # Max retry attempts
+export OPENAI_TIMEOUT="60"                          # Request timeout (seconds)
+export OPENAI_MAX_RETRIES="3"                       # Max retry attempts
 ```
 
 **Using Azure OpenAI:**
@@ -203,7 +235,7 @@ export OPENAI_MAX_RETRIES="3"                     # Max retry attempts
 ```bash
 export OPENAI_API_KEY="your-azure-key"
 export OPENAI_BASE_URL="https://your-resource.openai.azure.com/openai/deployments/your-deployment"
-export OPENAI_API_VERSION="2024-02-01"            # Azure API version
+export OPENAI_API_VERSION="2024-02-01"              # Azure API version
 ```
 
 ---
@@ -268,6 +300,7 @@ print(result2["output"])  # "Your name is Alice"
 ```
 
 **How it works:**
+
 1. `result1["messages"]["llm"]` contains the conversation history
 2. Pass it to the next `process()` call via `llm_messages`
 3. The agent now "remembers" the previous conversation
@@ -364,6 +397,7 @@ class CustomerSupportAgent(BaseAssistant):
 ```
 
 `CustomerSupportAgent` inherits:
+
 - The `get_time` tool from `BaseAssistant`
 - Can override config and add new tools
 
@@ -371,7 +405,8 @@ class CustomerSupportAgent(BaseAssistant):
 
 ## Error Handling
 
-All agent process exceptions inherit from `OpenAIAgentProcessError`. You can catch specific errors or use the base class to catch all:
+All agent process exceptions inherit from `OpenAIAgentProcessError`. You can catch specific errors or use the base class
+to catch all:
 
 ```python
 from pyaiagent import (
@@ -395,17 +430,17 @@ except OpenAIAgentProcessError as e:
 
 ### Exception Types
 
-| Exception | When |
-|-----------|------|
-| `InvalidInputError` | `input` is not a string |
-| `InvalidSessionError` | `session` is empty or not a string |
-| `InvalidMetadataError` | `metadata` is not a dict |
-| `InvalidLlmMessagesError` | `llm_messages` is not a list |
-| `InvalidInstructionParamsError` | `instruction_params` is not a dict |
-| `InstructionKeyError` | Missing key in `instruction_params` for placeholder |
-| `ClientError` | OpenAI API returned an error |
-| `MaxStepsExceededError` | Agent exceeded `max_steps` without completing |
-| `OpenAIAgentClosedError` | Agent used after `aclose()` called |
+| Exception                       | When                                                |
+|---------------------------------|-----------------------------------------------------|
+| `InvalidInputError`             | `input` is not a string                             |
+| `InvalidSessionError`           | `session` is empty or not a string                  |
+| `InvalidMetadataError`          | `metadata` is not a dict                            |
+| `InvalidLlmMessagesError`       | `llm_messages` is not a list                        |
+| `InvalidInstructionParamsError` | `instruction_params` is not a dict                  |
+| `InstructionKeyError`           | Missing key in `instruction_params` for placeholder |
+| `ClientError`                   | OpenAI API returned an error                        |
+| `MaxStepsExceededError`         | Agent exceeded `max_steps` without completing       |
+| `OpenAIAgentClosedError`        | Agent used after `aclose()` called                  |
 
 ---
 
@@ -421,6 +456,7 @@ from fastapi import FastAPI
 agent = MyAgent()  # Create once at module level
 app = FastAPI()
 
+
 @app.post("/chat")
 async def chat(message: str):
     # Reuse the same agent for every request
@@ -435,13 +471,16 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from pyaiagent import shutdown
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.agent = MyAgent()
     yield
     await shutdown()  # Cleanup shared OpenAI client on shutdown
 
+
 app = FastAPI(lifespan=lifespan)
+
 
 @app.post("/chat")
 async def chat(message: str):
@@ -460,6 +499,7 @@ class MyAgent(OpenAIAgent):
     Always confirm details before booking.
     """
 
+
 # ❌ Bad - vague instruction
 class MyAgent(OpenAIAgent):
     """Assistant."""
@@ -473,6 +513,7 @@ async def search(self, query: str, limit: int = 10) -> dict:
     """Search for items."""
     ...
 
+
 # ❌ Bad - AI doesn't know types
 async def search(self, query, limit):
     """Search for items."""
@@ -485,6 +526,7 @@ async def search(self, query, limit):
 # ✅ Good - structured response
 async def get_user(self, user_id: str) -> dict:
     return {"name": "Alice", "email": "alice@example.com"}
+
 
 # ⚠️ Works but less informative
 async def get_user(self, user_id: str) -> dict:
@@ -510,22 +552,22 @@ Base class for all agents.
 
 #### Class Attributes (set automatically)
 
-| Attribute | Description |
-|-----------|-------------|
-| `__agent_name__` | Class name |
-| `__instruction__` | Processed docstring |
-| `__config_kwargs__` | Merged configuration |
-| `__tool_names__` | Set of tool names |
-| `__tools_schema__` | Generated tool schemas |
+| Attribute           | Description            |
+|---------------------|------------------------|
+| `__agent_name__`    | Class name             |
+| `__instruction__`   | Processed docstring    |
+| `__config_kwargs__` | Merged configuration   |
+| `__tool_names__`    | Set of tool names      |
+| `__tools_schema__`  | Generated tool schemas |
 
 #### Methods
 
-| Method | Description |
-|--------|-------------|
-| `async process(...)` | Process a user input |
-| `async aclose()` | Close the agent and release resources |
-| `async __aenter__()` | Context manager entry |
-| `async __aexit__(...)` | Context manager exit |
+| Method                 | Description                           |
+|------------------------|---------------------------------------|
+| `async process(...)`   | Process a user input                  |
+| `async aclose()`       | Close the agent and release resources |
+| `async __aenter__()`   | Context manager entry                 |
+| `async __aexit__(...)` | Context manager exit                  |
 
 ### `shutdown()`
 
@@ -541,15 +583,66 @@ await shutdown()
 - **Safe** to call multiple times
 - Use in server shutdown handlers (FastAPI lifespan, etc.)
 
-#### `process()` Parameters
+### `process()`
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `input` | `str` | Yes | User message |
-| `session` | `str` | No | Session ID for tracking |
-| `llm_messages` | `list` | No | Previous messages for memory |
-| `instruction_params` | `dict` | No | Placeholders for instructions |
-| `metadata` | `dict` | No | Custom metadata |
+The main method to interact with your agent.
+
+```python
+result = await agent.process(
+    input="Hello!",
+    session="user-123",        # Optional
+    llm_messages=[...],        # Optional - for conversation memory
+    instruction_params={...},  # Optional - for dynamic instructions
+    metadata={...}             # Optional - custom data
+)
+```
+
+#### Parameters
+
+| Parameter            | Type   | Required | Description                                            |
+|----------------------|--------|----------|--------------------------------------------------------|
+| `input`              | `str`  | Yes      | The user's message to process                          |
+| `session`            | `str`  | No       | Session ID for tracking (default: auto-generated UUID) |
+| `llm_messages`       | `list` | No       | Previous messages for multi-turn conversations         |
+| `instruction_params` | `dict` | No       | Values for `{placeholders}` in agent docstring         |
+| `metadata`           | `dict` | No       | Custom metadata passed through to response             |
+
+#### Return Value
+
+Returns a dictionary with:
+
+```python
+{
+    "input": "Hello!",                   # Original input
+    "output": "Hi there! How can I...",  # Agent's text response
+    "output_parsed": None,               # Pydantic model if text_format is set
+    "session": "user-123",               # Session ID
+    "turn": "uuid-of-this-turn",         # Unique turn identifier
+    "steps": 1,                          # Number of LLM rounds taken
+    "tokens": {
+        "input_tokens": 25,
+        "output_tokens": 42,
+        "total_tokens": 67
+    },
+    "messages": {
+        "llm": [...],                    # Pass to next process() for memory
+        "ui": [...]                      # Formatted for display/storage
+    },
+    "metadata": {}                       # Your custom metadata
+}
+```
+
+| Key             | Type              | Description                                     |
+|-----------------|-------------------|-------------------------------------------------|
+| `input`         | `str`             | The original user input                         |
+| `output`        | `str`             | The agent's final text response                 |
+| `output_parsed` | `BaseModel\|None` | Parsed Pydantic model (if `text_format` is set) |
+| `session`       | `str`             | Session identifier                              |
+| `turn`          | `str`             | Unique ID for this conversation turn            |
+| `steps`         | `int`             | Number of LLM ↔ tool rounds                     |
+| `tokens`        | `dict`            | Token usage breakdown                           |
+| `messages`      | `dict`            | LLM messages (for memory) and UI messages       |
+| `metadata`      | `dict`            | Custom metadata passed through                  |
 
 ---
 
