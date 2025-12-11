@@ -3,6 +3,7 @@ PyAiAgent is a modern, fast (high-performance), async framework for building AI 
 """
 
 from pyaiagent.openai.agent import OpenAIAgent
+from pyaiagent.openai.shutdown import shutdown
 from pyaiagent.openai.exceptions.process import (OpenAIAgentProcessError,
                                                  OpenAIAgentClosedError,
                                                  InvalidInputError,
@@ -15,8 +16,10 @@ from pyaiagent.openai.exceptions.process import (OpenAIAgentProcessError,
                                                  MaxStepsExceededError)
 
 __all__ = [
-    # Core
+    # AI Agent
     "OpenAIAgent",
+    # Shutdown function
+    "shutdown",
     # Exceptions (runtime errors)
     "OpenAIAgentProcessError",
     "OpenAIAgentClosedError",

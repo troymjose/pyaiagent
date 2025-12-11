@@ -24,6 +24,8 @@ class AsyncOpenAIClient(metaclass=PerEventLoopSingleton):
 
     @property
     def client(self) -> AsyncOpenAI:
+        if self._closed:
+            raise RuntimeError("AsyncOpenAIClient is closed. Create a new instance.")
         return self._client
 
     async def aclose(self) -> None:

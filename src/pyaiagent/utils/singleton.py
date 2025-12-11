@@ -68,3 +68,26 @@ class PerEventLoopSingleton(type):
             registry[loop] = instance
 
         return instance
+
+    def delete_instance(cls) -> bool:
+        """
+        Delete the instance associated with the current event loop.
+        Returns True if an instance was deleted, False otherwise (including when no loop is running).
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return False
+
+        with cls._lock:
+            existing = cls._instances_per_loop.get(loop, _MISSING)
+            # Nothing to delete, or construction was in-progress
+            if existing in (_MISSING, _IN_PROGRESS):
+                return False
+            cls._instances_per_loop.pop(loop, None)
+            return True
+
+    def delete_all_instances(cls) -> None:
+        """ Testing/maintenance helper: clear the global instance registry """
+        with cls._lock:
+            cls._instances_per_loop.clear()
