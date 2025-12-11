@@ -1,5 +1,4 @@
 import textwrap
-
 from pyaiagent.openai.exceptions.definition import OpenAIAgentDefinitionError
 
 __all__ = ["OpenAIAgentInstructionManager", ]
@@ -12,6 +11,7 @@ class OpenAIAgentInstructionManager:
         # Clean and normalize docstring text
         instruction = textwrap.dedent(cls.__doc__ or "").strip()
         if not instruction:
-            raise OpenAIAgentDefinitionError(cls.__name__, [
-                "Missing class docstring. Add a triple-quoted docstring as agent instruction."])
+            raise OpenAIAgentDefinitionError(
+                cls_name=cls.__name__,
+                errors=["Missing class docstring. Add a triple-quoted docstring as agent instruction."])
         return instruction
