@@ -1,7 +1,6 @@
 import inspect
 import textwrap
 from typing import Any
-
 from pyaiagent.openai.manager.tool_schema import ToolSchemaManager
 from pyaiagent.openai.exceptions.definition import OpenAIAgentDefinitionError
 
@@ -16,10 +15,8 @@ class OpenAIAgentToolManager:
         """Get all tool schemas from base classes in MRO."""
         merged_tools: dict[str, dict[str, Any]] = {}
         for base in reversed(mro[1:]):
-            for tool_name, tool_schema in zip(
-                    getattr(base, "__tool_names__", ()),
-                    getattr(base, "__tools_schema__", ())
-            ):
+            for tool_name, tool_schema in zip(getattr(base, "__tool_names__", ()),
+                                              getattr(base, "__tools_schema__", ())):
                 merged_tools[tool_name] = tool_schema
         return merged_tools
 
@@ -39,14 +36,17 @@ class OpenAIAgentToolManager:
                 if not cleaned_tool_doc:
                     errors.append(
                         f"Tool '{name}' is missing docstring. Add a triple-quoted docstring as tool description.")
+                    continue
                 declared_tools.append(ToolSchemaManager.build_function_tool_schema(name, obj, cleaned_tool_doc))
                 tool_names.append(name)
         if errors:
-            raise OpenAIAgentDefinitionError(cls.__name__, errors)
+            raise OpenAIAgentDefinitionError(cls_name=cls.__name__, errors=errors)
 
         # Get tools from base classes in MRO and merge
         merged_tools: dict[str, dict[str, Any]] = OpenAIAgentToolManager._get_base_classes_tools(mro=cls.__mro__)
         # Add current class's tools to the merged dict, this will override tools from base classes
         for n, sch in zip(tool_names, declared_tools):
             merged_tools[n] = sch
+
+        # Return the final merged tools dictionary
         return merged_tools
