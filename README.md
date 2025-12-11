@@ -433,12 +433,13 @@ async def chat(message: str):
 ```python
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+from pyaiagent import shutdown
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.agent = MyAgent()
     yield
-    await app.state.agent.aclose()  # Cleanup on shutdown
+    await shutdown()  # Cleanup shared OpenAI client on shutdown
 
 app = FastAPI(lifespan=lifespan)
 
@@ -525,6 +526,20 @@ Base class for all agents.
 | `async aclose()` | Close the agent and release resources |
 | `async __aenter__()` | Context manager entry |
 | `async __aexit__(...)` | Context manager exit |
+
+### `shutdown()`
+
+Gracefully close the shared OpenAI client for the current event loop.
+
+```python
+from pyaiagent import shutdown
+
+await shutdown()
+```
+
+- **No-op** if no client was ever created on this loop
+- **Safe** to call multiple times
+- Use in server shutdown handlers (FastAPI lifespan, etc.)
 
 #### `process()` Parameters
 
