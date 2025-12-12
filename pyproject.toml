@@ -57,6 +57,13 @@ where = ["src"]
 [tool.setuptools.package-data]
 pyaiagent = ["py.typed"]
 
+#Before each release:
+#[ ] Update __version__ in src/pyaiagent/__init__.py
+#[ ] Update version in pyproject.toml
+#[ ] Commit: git commit -m "Bump version to X.Y.Z"
+#[ ] Tag: git tag -a vX.Y.Z -m "Release X.Y.Z"
+#[ ] Push: git push && git push --tags
+#[ ] Publish: python -m build && twine upload dist/*
 
 ## 1. Make sure everything is committed
 #git add .
@@ -74,13 +81,6 @@ pyaiagent = ["py.typed"]
 #When ready to release → create a new tag (v0.2.0, etc.)
 #Push tag → publish to PyPI
 #📋 Version Bumping Checklist
-#Before each release:
-#[ ] Update __version__ in src/pyaiagent/__init__.py
-#[ ] Update version in pyproject.toml
-#[ ] Commit: git commit -m "Bump version to X.Y.Z"
-#[ ] Tag: git tag -a vX.Y.Z -m "Release X.Y.Z"
-#[ ] Push: git push && git push --tags
-#[ ] Publish: python -m build && twine upload dist/*
 
 
 # 1️⃣ Clean old builds:
