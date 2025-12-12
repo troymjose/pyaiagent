@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyaiagent"
-version = "0.1.0"
-description = "A lightweight, high-performance framework for building OpenAI-powered agents in Python"
+version = "0.1.1"
+description = "PyAiAgent is a modern, fast (high-performance), async framework for building AI agents with pythonic code."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
