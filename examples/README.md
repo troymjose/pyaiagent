@@ -156,6 +156,137 @@ for user_input in messages:
 
 ---
 
+## Instance Variables vs Instruction Params
+
+Understanding when to use `__init__` with instance variables versus `instruction_params` is key to building efficient agents.
+
+### When to Use What
+
+| Approach | Use Case | Example |
+|----------|----------|---------|
+| **Instance variables (`__init__`)** | Static, per-instance dependencies that don't change between requests | DB connections, API clients, config objects |
+| **`instruction_params`** | Dynamic, per-request data that changes with each call | User name, current date, user preferences |
+| **Single instance + `instruction_params`** | Same agent behavior, different context per request | Multi-tenant apps, personalized responses |
+
+### Pattern 1: Dependency Injection via `__init__`
+
+Use `__init__` when your agent needs external services or static configuration:
+
+```python
+class DatabaseAgent(OpenAIAgent):
+    """You are a data assistant. Query the database to help users."""
+
+    def __init__(self, db_connection, cache_client=None):
+        super().__init__()  # Always call super().__init__()
+        self.db = db_connection
+        self.cache = cache_client
+
+    async def query_users(self, user_id: str) -> dict:
+        """Look up a user by ID."""
+        # Use the injected dependency
+        return await self.db.fetch_user(user_id)
+
+# Usage
+db = DatabaseConnection("postgresql://...")
+agent = DatabaseAgent(db_connection=db)
+result = await agent.process(input="Find user #123")
+```
+
+### Pattern 2: Per-Request Context via `instruction_params`
+
+Use `instruction_params` for data that changes with each request:
+
+```python
+class PersonalizedAgent(OpenAIAgent):
+    """
+    You are helping {user_name}.
+    Their preferences: {preferences}
+    Today is {date}.
+    """
+
+# Same agent instance, different context per request
+agent = PersonalizedAgent()
+
+# Request from User A
+result = await agent.process(
+    input="What should I do today?",
+    instruction_params={
+        "user_name": "Alice",
+        "preferences": "loves hiking",
+        "date": "Monday, Jan 13"
+    }
+)
+
+# Request from User B (same agent instance!)
+result = await agent.process(
+    input="Suggest a movie",
+    instruction_params={
+        "user_name": "Bob",
+        "preferences": "sci-fi fan",
+        "date": "Monday, Jan 13"
+    }
+)
+```
+
+### Pattern 3: Single Instance for Production
+
+For web servers, create **one agent instance** and reuse it for all requests:
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+
+class AssistantAgent(OpenAIAgent):
+    """You help users with {task_type}."""
+
+    def __init__(self, api_client):
+        super().__init__()
+        self.api = api_client  # Shared across all requests
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create ONCE at startup
+    app.state.agent = AssistantAgent(api_client=MyAPIClient())
+    yield
+    await shutdown()
+
+app = FastAPI(lifespan=lifespan)
+
+@app.post("/chat")
+async def chat(request: ChatRequest, req: Request):
+    agent = req.app.state.agent  # Reuse the same instance
+    
+    # Customize per-request with instruction_params
+    return await agent.process(
+        input=request.message,
+        instruction_params={"task_type": request.task_type}
+    )
+```
+
+### Decision Guide
+
+**Use `__init__` + instance variables when:**
+- You need database connections, API clients, or external services
+- The dependency is expensive to create (connection pools, clients)
+- The data is the same for all requests from this agent instance
+
+**Use `instruction_params` when:**
+- Data varies per request (user info, current time, context)
+- You want one agent to serve multiple users/tenants
+- The customization is about "what the agent knows" not "what it can do"
+
+**Use a single instance when:**
+- Running in a web server (FastAPI, etc.)
+- All requests share the same tools and dependencies
+- You want efficient resource usage
+
+**Use multiple instances when:**
+- Different instances need different injected dependencies
+- You're testing with mock dependencies
+- Instances need isolated state (rare)
+
+---
+
 ## Need Help?
 
 - 📖 [Full documentation](../README.md)

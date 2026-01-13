@@ -32,6 +32,7 @@ result = await agent.process(input="Did I just build an AI agent in 2 lines?")
 - [Structured Output](#structured-output)
 - [Sessions and Conversation Memory](#sessions-and-conversation-memory)
 - [Dynamic Instructions](#dynamic-instructions)
+- [Dependency Injection](#dependency-injection)
 - [Inheritance and Composition](#inheritance-and-composition)
 - [Error Handling](#error-handling)
 - [Best Practices](#best-practices)
@@ -362,6 +363,54 @@ result = await agent.process(
         "preferences": "loves hiking, vegetarian",
         "date": "2025-01-15"
     }
+)
+```
+
+---
+
+## Dependency Injection
+
+Agents can accept dependencies via `__init__` for static, per-instance configuration:
+
+```python
+class DatabaseAgent(OpenAIAgent):
+    """You are a data assistant."""
+
+    def __init__(self, db_connection):
+        super().__init__()  # Always call super().__init__()
+        self.db = db_connection
+
+    async def query_users(self, user_id: str) -> dict:
+        """Look up a user by ID."""
+        return await self.db.fetch_user(user_id)
+
+
+# Usage
+db = DatabaseConnection("postgresql://...")
+agent = DatabaseAgent(db_connection=db)
+```
+
+### When to Use What
+
+| Approach | Use Case | Lifecycle |
+|----------|----------|-----------|
+| `__init__` + instance variables | DB connections, API clients, static config | Set once at instantiation |
+| `instruction_params` | User name, date, preferences, context | Changes per `process()` call |
+
+**Rule of thumb:**
+- `__init__` is for "what the agent **has**" (dependencies, clients)
+- `instruction_params` is for "what the agent **knows**" (context, user info)
+
+For production servers, combine both patterns — create one agent with injected dependencies at startup, and customize per-request with `instruction_params`:
+
+```python
+# Create once at startup with dependencies
+agent = MyAgent(db_connection=db, api_client=client)
+
+# Customize per-request with instruction_params
+result = await agent.process(
+    input=user_message,
+    instruction_params={"user_name": current_user.name}
 )
 ```
 

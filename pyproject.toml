@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyaiagent"
-version = "0.1.1"
+version = "0.1.2"
 description = "PyAiAgent is a modern, fast (high-performance), async framework for building AI agents with pythonic code."
 readme = "README.md"
 license = { text = "MIT" }
@@ -90,7 +90,7 @@ pyaiagent = ["py.typed"]
 # python -m build
 #
 # 3️⃣ Test installation:
-# pip install dist/pyaiagent-0.1.0-py3-none-any.whl
+# pip install dist/pyaiagent-0.1.2-py3-none-any.whl
 #
 # 4️⃣ Verify:
 # python -c "import pyaiagent; print(pyaiagent.__version__)"
