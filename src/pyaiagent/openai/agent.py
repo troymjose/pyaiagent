@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 import asyncio
 import logging
@@ -281,8 +282,33 @@ class OpenAIAgent:
 
     def _format_instruction(self, instruction_params: Dict[str, str] | None = None) -> str:
         """ Format instruction template with provided parameters. """
+        instruction = self.__instruction__
+
+        # Fast path: no params, return as-is
+        if not instruction_params:
+            return instruction
+
+        # Replace only valid {identifier} placeholders, leaving JSON braces untouched
+        # Pattern matches: {word} where word is a valid Python identifier
+        # Supports escape syntax: {{name}} → {name} (literal braces)
+        def replace_match(match: re.Match) -> str:
+            prefix, key, suffix = match.group(1), match.group(2), match.group(3)
+
+            # Escaped braces: {{name}} → {name} literally
+            if prefix == '{' and suffix == '}':
+                return f'{{{key}}}'
+
+            # Normal placeholder: {name} → value
+            if key in instruction_params:
+                return f'{prefix}{instruction_params[key]}{suffix}'
+
+            # Key looks like a placeholder but wasn't provided - raise error
+            raise KeyError(key)
+
         try:
-            instruction: str = self.__instruction__.format(**(instruction_params or {}))
+            # Match optional surrounding braces + identifier + optional surrounding braces
+            # This handles both {name} and {{name}} (escaped) syntax
+            instruction = re.sub(r'(\{?)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(\}?)', replace_match, instruction)
             return instruction
         except KeyError as exc:
             raise InstructionKeyError(agent_name=self.__agent_name__, key=str(exc))
