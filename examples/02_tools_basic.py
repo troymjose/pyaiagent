@@ -6,13 +6,15 @@ Tools let your agent DO things — call APIs, query databases, run calculations,
 or interact with external systems. This is where agents become truly powerful.
 
 What you'll learn:
-  • How to define tools as async methods
+  • How to define tools as async or sync methods
   • How docstrings become tool descriptions
   • How type hints become parameter schemas
-  • How the AI decides when to use tools
+  • When to use async vs sync tools
 
 Key concepts:
-  • Tools are just async methods on your agent class
+  • Tools are methods on your agent class (async or sync)
+  • Async tools (async def) — for I/O-bound work (API calls, DB)
+  • Sync tools (def) — for CPU-bound work (runs in thread pool)
   • Method name → tool name
   • Method docstring → tool description (AI reads this!)
   • Type hints → JSON Schema for parameters
@@ -235,6 +237,90 @@ class CalculatorAgent(OpenAIAgent):
 
 
 # =============================================================================
+# Example 4: Sync Tools — CPU-Bound Work
+# =============================================================================
+#
+# Sync tools (regular def methods) are perfect for CPU-bound operations.
+# They run in a thread pool automatically, so they don't block the event loop.
+
+class DataAnalyzer(OpenAIAgent):
+    """
+    You are a data analysis assistant.
+    Use the available tools to analyze data and compute statistics.
+    Present results clearly with explanations.
+    """
+
+    # Sync tool: CPU-bound computation (runs in thread pool)
+    def compute_statistics(self, numbers: list[float]) -> dict:
+        """
+        Compute statistical measures for a list of numbers.
+
+        Args:
+            numbers: A list of numbers to analyze.
+        """
+        import statistics
+
+        if not numbers:
+            return {"error": "Empty list provided"}
+
+        result = {
+            "count": len(numbers),
+            "sum": sum(numbers),
+            "mean": statistics.mean(numbers),
+            "median": statistics.median(numbers),
+            "min": min(numbers),
+            "max": max(numbers),
+        }
+
+        if len(numbers) > 1:
+            result["stdev"] = round(statistics.stdev(numbers), 4)
+            result["variance"] = round(statistics.variance(numbers), 4)
+
+        return result
+
+    # Sync tool: Text processing (CPU-bound)
+    def analyze_text(self, text: str) -> dict:
+        """
+        Analyze text and return statistics about it.
+
+        Args:
+            text: The text to analyze.
+        """
+        import re
+
+        words = text.split()
+        sentences = re.split(r'[.!?]+', text)
+        sentences = [s.strip() for s in sentences if s.strip()]
+
+        return {
+            "character_count": len(text),
+            "word_count": len(words),
+            "sentence_count": len(sentences),
+            "average_word_length": round(sum(len(w) for w in words) / len(words), 2) if words else 0,
+            "unique_words": len(set(w.lower() for w in words)),
+        }
+
+    # Async tool: Could be I/O-bound (shown for comparison)
+    async def get_sample_data(self, dataset: str) -> dict:
+        """
+        Get sample data for analysis.
+
+        Args:
+            dataset: Name of the dataset: "sales", "temperatures", or "scores".
+        """
+        datasets = {
+            "sales": [120, 150, 180, 200, 175, 190, 220, 195, 210, 185],
+            "temperatures": [72, 75, 68, 80, 85, 78, 82, 79, 76, 74],
+            "scores": [85, 92, 78, 95, 88, 91, 87, 93, 89, 90],
+        }
+        return {
+            "dataset": dataset,
+            "data": datasets.get(dataset, []),
+            "found": dataset in datasets
+        }
+
+
+# =============================================================================
 # Run the Examples
 # =============================================================================
 
@@ -299,6 +385,33 @@ async def main() -> None:
     print(f"Question: Convert $100 to EUR and JPY.\n")
     print(f"Agent: {result2['output']}")
 
+    print("\n" + "-" * 60 + "\n")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Example 4: Data Analyzer (sync tools for CPU-bound work)
+    # ─────────────────────────────────────────────────────────────────────────
+    print("=" * 60)
+    print("📊 EXAMPLE 4: Data Analyzer (Sync Tools)")
+    print("=" * 60 + "\n")
+
+    analyzer = DataAnalyzer()
+
+    # Using sync tool for computation
+    result = await analyzer.process(
+        input="Get the sales dataset and compute statistics on it."
+    )
+    print(f"Question: Analyze the sales dataset.\n")
+    print(f"Agent: {result['output']}\n")
+
+    # Text analysis with sync tool
+    print("-" * 40 + "\n")
+    result2 = await analyzer.process(
+        input="Analyze this text: 'The quick brown fox jumps over the lazy dog. "
+              "This sentence contains every letter of the alphabet. Amazing!'"
+    )
+    print(f"Question: Analyze the given text.\n")
+    print(f"Agent: {result2['output']}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -308,28 +421,33 @@ if __name__ == "__main__":
 # Tool Design Best Practices
 # =============================================================================
 #
-# 1. WRITE CLEAR DOCSTRINGS
+# 1. CHOOSE ASYNC VS SYNC APPROPRIATELY
+#    - async def: For I/O-bound work (API calls, database queries, file I/O)
+#    - def: For CPU-bound work (computation, parsing, data processing)
+#    Sync tools run in a thread pool automatically, so they don't block.
+#
+# 2. WRITE CLEAR DOCSTRINGS
 #    The AI reads your docstring to understand what the tool does.
 #    Be specific about parameters and expected values.
 #
-# 2. USE TYPE HINTS
+# 3. USE TYPE HINTS
 #    Type hints are converted to JSON Schema. Without them, the AI
 #    won't know what type of data to pass.
 #
-# 3. RETURN DICTS
+# 4. RETURN DICTS
 #    Always return a dict with structured data. This helps the AI
 #    understand and summarize the results.
 #
-# 4. HANDLE ERRORS GRACEFULLY
+# 5. HANDLE ERRORS GRACEFULLY
 #    Return error information in the dict rather than raising exceptions:
 #
-#      async def risky_operation(self, id: str) -> dict:
+#      def risky_operation(self, id: str) -> dict:
 #          try:
-#              data = await fetch_data(id)
+#              data = process_data(id)
 #              return {"success": True, "data": data}
 #          except Exception as e:
 #              return {"success": False, "error": str(e)}
 #
-# 5. KEEP TOOLS FOCUSED
+# 6. KEEP TOOLS FOCUSED
 #    Each tool should do one thing well. Better to have multiple
 #    simple tools than one complex tool.

@@ -254,7 +254,16 @@ class OpenAIAgent:
             else:
                 args = {}
             try:
-                tool_result = await asyncio.wait_for(tool_function(**args), timeout=self._config.tool_timeout)
+                # Check if tool is async or sync
+                if asyncio.iscoroutinefunction(tool_function):
+                    # Async tool: call directly
+                    tool_result = await asyncio.wait_for(tool_function(**args), timeout=self._config.tool_timeout)
+                else:
+                    # Sync tool: run in thread pool to avoid blocking event loop
+                    tool_result = await asyncio.wait_for(
+                        asyncio.to_thread(tool_function, **args),
+                        timeout=self._config.tool_timeout
+                    )
                 if not isinstance(tool_result, dict):
                     tool_result = {"result": tool_result}
             except asyncio.CancelledError:

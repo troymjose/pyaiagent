@@ -37,7 +37,7 @@ uvicorn examples.06_fastapi_basic:app --reload
 |------|-------------|--------------|
 | [`00_basic_agent.py`](00_basic_agent.py) | Your first agent in 10 lines | `OpenAIAgent`, docstrings, `process()` |
 | [`01_conversation_memory.py`](01_conversation_memory.py) | Multi-turn conversations | `llm_messages`, chat loops |
-| [`02_tools_basic.py`](02_tools_basic.py) | Give agents superpowers | `async` tools, type hints, docstrings |
+| [`02_tools_basic.py`](02_tools_basic.py) | Give agents superpowers | `async`/`sync` tools, type hints, docstrings |
 
 ### Intermediate Examples
 
@@ -88,9 +88,15 @@ print(result["output"])
 class ToolAgent(OpenAIAgent):
     """You can use tools to help users."""
 
+    # Async tool: for I/O-bound work (API calls, DB)
     async def get_weather(self, city: str) -> dict:
         """Get weather for a city."""
         return {"city": city, "temp": "22°C"}
+
+    # Sync tool: for CPU-bound work (runs in thread pool)
+    def calculate(self, expression: str) -> dict:
+        """Evaluate a math expression."""
+        return {"result": eval(expression)}
 ```
 
 ### Structured Output

@@ -119,8 +119,8 @@ asyncio.run(main())
 
 ## Adding Tools
 
-Tools are async methods on your agent class. The method name becomes the tool name, and the docstring becomes the tool
-description.
+Tools are methods on your agent class. The method name becomes the tool name, and the docstring becomes the tool
+description. You can use **async** or **sync** methods depending on your use case.
 
 ```python
 from pyaiagent import OpenAIAgent
@@ -142,9 +142,40 @@ class WeatherAgent(OpenAIAgent):
         }
 ```
 
+### Async vs Sync Tools
+
+| Tool Type | Syntax | Best For | Execution |
+|-----------|--------|----------|-----------|
+| **Async** | `async def` | I/O-bound (API calls, DB queries) | Direct await |
+| **Sync** | `def` | CPU-bound (computation, parsing) | Thread pool (non-blocking) |
+
+```python
+class MyAgent(OpenAIAgent):
+    """Agent with both async and sync tools."""
+
+    # Async tool: for I/O-bound work (API calls, database)
+    async def fetch_data(self, url: str) -> dict:
+        """Fetch data from an API."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                return await response.json()
+
+    # Sync tool: for CPU-bound work (runs in thread pool automatically)
+    def calculate_stats(self, numbers: list[float]) -> dict:
+        """Calculate statistics on a list of numbers."""
+        import statistics
+        return {
+            "mean": statistics.mean(numbers),
+            "median": statistics.median(numbers),
+            "stdev": statistics.stdev(numbers) if len(numbers) > 1 else 0
+        }
+```
+
+Sync tools are automatically run in a thread pool via `asyncio.to_thread()`, so they don't block the event loop.
+
 ### How It Works
 
-1. You define `async def get_weather(self, city: str)`
+1. You define a method with a docstring (async or sync)
 2. pyaiagent automatically creates a tool schema for OpenAI
 3. When the AI decides to use the tool, pyaiagent calls your method
 4. The return value is sent back to the AI

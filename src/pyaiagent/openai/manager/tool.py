@@ -6,6 +6,11 @@ from pyaiagent.openai.exceptions.definition import OpenAIAgentDefinitionError
 
 __all__ = ["OpenAIAgentToolManager", ]
 
+# Framework methods that should never be treated as tools
+_EXCLUDED_METHODS = frozenset({
+    'process', 'aclose', 'format_llm_message', 'format_ui_message'
+})
+
 
 class OpenAIAgentToolManager:
     """Discovers and builds tool schemas from agent class methods."""
@@ -21,24 +26,43 @@ class OpenAIAgentToolManager:
         return merged_tools
 
     @staticmethod
+    def _is_tool_method(name: str, obj: Any) -> bool:
+        """
+        Check if a method should be treated as a tool.
+        
+        Tools can be:
+        - Async methods (async def) - for I/O-bound work
+        - Sync methods (def) - for CPU-bound work (will be run in thread pool)
+        
+        Excluded:
+        - Private methods (starting with _)
+        - Framework hook methods (process, aclose, format_*_message)
+        """
+        if name.startswith("_"):
+            return False
+        if name in _EXCLUDED_METHODS:
+            return False
+        # Accept both async and sync methods
+        return inspect.iscoroutinefunction(obj) or inspect.isfunction(obj)
+
+    @staticmethod
     def create(cls) -> dict[str, dict[str, Any]]:
         """Discover tools from class and merge with inherited tools."""
         errors: list[str] = []
         declared_tools: list[dict[str, Any]] = []
         tool_names: list[str] = []
         for name, obj in cls.__dict__.items():
-            if name.startswith("_"):
+            if not OpenAIAgentToolManager._is_tool_method(name, obj):
                 continue
-            if inspect.iscoroutinefunction(obj):
-                tool_doc = getattr(obj, "__doc__", "")
-                # Clean and normalize docstring text
-                cleaned_tool_doc = textwrap.dedent(tool_doc or "").strip()
-                if not cleaned_tool_doc:
-                    errors.append(
-                        f"Tool '{name}' is missing docstring. Add a triple-quoted docstring as tool description.")
-                    continue
-                declared_tools.append(ToolSchemaManager.build_function_tool_schema(name, obj, cleaned_tool_doc))
-                tool_names.append(name)
+            tool_doc = getattr(obj, "__doc__", "")
+            # Clean and normalize docstring text
+            cleaned_tool_doc = textwrap.dedent(tool_doc or "").strip()
+            if not cleaned_tool_doc:
+                errors.append(
+                    f"Tool '{name}' is missing docstring. Add a triple-quoted docstring as tool description.")
+                continue
+            declared_tools.append(ToolSchemaManager.build_function_tool_schema(name, obj, cleaned_tool_doc))
+            tool_names.append(name)
         if errors:
             raise OpenAIAgentDefinitionError(cls_name=cls.__name__, errors=errors)
 
