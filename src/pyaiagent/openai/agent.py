@@ -313,6 +313,51 @@ class OpenAIAgent:
         except KeyError as exc:
             raise InstructionKeyError(agent_name=self.__agent_name__, key=str(exc))
 
+    def format_llm_message(self, response: Any) -> str:
+        """
+        Format assistant response content for LLM conversation memory.
+
+        Override this method to customize what gets stored in llm_messages.
+        This is useful for reducing token usage when using structured outputs
+        with large fields that don't need to be in conversation history.
+
+        Args:
+            response: OpenAI API response object with output_text and output_parsed attributes.
+
+        Returns:
+            String content to store as the assistant message.
+
+        Example:
+            def format_llm_message(self, response) -> str:
+                # Only store agent_response, not the large bot_config
+                if response.output_parsed:
+                    return response.output_parsed.agent_response
+                return response.output_text or ""
+        """
+        return response.output_text or ""
+
+    def format_ui_message(self, response: Any) -> str:
+        """
+        Format assistant response content for UI/frontend display.
+
+        Override this method to customize what gets stored in ui_messages.
+        UI messages are used for session logs, frontend display, and analytics.
+
+        Args:
+            response: OpenAI API response object with output_text and output_parsed attributes.
+
+        Returns:
+            String content to store for UI display.
+
+        Example:
+            def format_ui_message(self, response) -> str:
+                # Show a user-friendly summary in UI
+                if response.output_parsed:
+                    return f"Agent: {response.output_parsed.agent_response}"
+                return response.output_text or ""
+        """
+        return response.output_text or ""
+
     async def process(self,
                       *,
                       input: str,
@@ -383,15 +428,15 @@ class OpenAIAgent:
 
             if config.llm_messages_enabled:
                 if not tool_calls and response.output_text:
-                    # Final text response - simple format
-                    current_turn_llm_messages.append({"role": "assistant", "content": response.output_text})
+                    # Final text response - use hook for customizable content
+                    current_turn_llm_messages.append({"role": "assistant", "content": self.format_llm_message(response)})
                 else:
                     # Has tool calls - preserve full structure for API compatibility
                     current_turn_llm_messages.extend(item.model_dump() for item in response_output)
 
-            # Simple format for final text response, full structure for tool calls
+            # Final text response uses hook, tool calls preserve full structure
             current_turn_ui_messages.extend(create_ui_messages(data={"role": "assistant",
-                                                                     "content": response.output_text or ""} if not tool_calls and response.output_text else response_output,
+                                                                     "content": self.format_ui_message(response)} if not tool_calls and response.output_text else response_output,
                                                                session=session,
                                                                turn=turn,
                                                                step=step,

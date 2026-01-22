@@ -61,6 +61,8 @@ uvicorn examples.06_fastapi_basic:app --reload
 |------|-------------|--------------|
 | [`09_inheritance_composition.py`](09_inheritance_composition.py) | Building agent hierarchies | Inheritance, tool reuse, routing |
 | [`10_context_manager.py`](10_context_manager.py) | Async context managers | `async with`, cleanup, pipelines |
+| [`11_message_formatting.py`](11_message_formatting.py) | Token optimization hooks | `format_llm_message`, `format_ui_message` |
+| [`12_dependency_injection.py`](12_dependency_injection.py) | Injecting services via `__init__` | DB clients, API clients, testing |
 
 ---
 
@@ -119,6 +121,39 @@ for user_input in messages:
     llm_messages = result["messages"]["llm"]
 ```
 
+### Message Formatting (Token Optimization)
+
+```python
+class MyAgent(OpenAIAgent):
+    """You are helpful."""
+
+    class Config:
+        text_format = MyOutput  # Has large fields
+
+    def format_llm_message(self, response) -> str:
+        # Only store essential content in memory
+        if response.output_parsed:
+            return response.output_parsed.summary  # Not the large data!
+        return response.output_text or ""
+```
+
+### Dependency Injection
+
+```python
+class MyAgent(OpenAIAgent):
+    """You help users with data."""
+
+    def __init__(self, db_client):
+        super().__init__()  # Always call super!
+        self.db = db_client
+
+    async def get_user(self, user_id: str) -> dict:
+        return await self.db.fetch(user_id)
+
+# Usage
+agent = MyAgent(db_client=my_database)
+```
+
 ---
 
 ## Learning Path
@@ -137,6 +172,8 @@ for user_input in messages:
 - `05_dynamic_instructions.py` — personalization
 - `08_error_handling.py` — robust error handling
 - `09_inheritance_composition.py` — agent hierarchies
+- `11_message_formatting.py` — token optimization
+- `12_dependency_injection.py` — DB/API client injection
 
 ---
 

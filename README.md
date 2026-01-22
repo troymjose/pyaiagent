@@ -317,6 +317,8 @@ for user_input in ["Hi, I'm Alice", "What's my name?", "Thanks!"]:
     print(result["output"])
 ```
 
+**Token optimization:** When using structured outputs with large fields, conversation memory can grow quickly. Override `format_llm_message()` to control what gets stored. See [Best Practices #6](#6-customize-message-storage-token-optimization) for details.
+
 ### Response Structure
 
 ```python
@@ -591,6 +593,45 @@ class Config:
     max_steps = 5         # Limit runaway loops
 ```
 
+### 6. Customize Message Storage (Token Optimization)
+
+When using structured outputs with large fields, you can reduce token usage by customizing what gets stored in conversation memory:
+
+```python
+from pydantic import BaseModel
+
+class MyOutput(BaseModel):
+    agent_response: str   # Small - what user sees
+    large_data: str       # Large - don't need in memory
+
+
+class MyAgent(OpenAIAgent):
+    """You are a helpful assistant."""
+
+    class Config:
+        text_format = MyOutput
+
+    def format_llm_message(self, response) -> str:
+        # Only store agent_response in LLM memory (saves tokens!)
+        if response.output_parsed:
+            return response.output_parsed.agent_response
+        return response.output_text or ""
+
+    def format_ui_message(self, response) -> str:
+        # Clean, user-friendly view for UI (not raw JSON!)
+        if response.output_parsed:
+            return response.output_parsed.agent_response
+        return response.output_text or ""
+```
+
+Both hooks can return the same clean content, or `format_ui_message` can include additional context for display (like timestamps, metadata summaries, etc.) while keeping `format_llm_message` minimal for token efficiency.
+
+**Token savings example:**
+
+| Turns | Without optimization | With optimization |
+|-------|---------------------|-------------------|
+| 10    | ~50,000 tokens      | ~5,000 tokens     |
+
 ---
 
 ## API Reference
@@ -611,12 +652,14 @@ Base class for all agents.
 
 #### Methods
 
-| Method                 | Description                           |
-|------------------------|---------------------------------------|
-| `async process(...)`   | Process a user input                  |
-| `async aclose()`       | Close the agent and release resources |
-| `async __aenter__()`   | Context manager entry                 |
-| `async __aexit__(...)` | Context manager exit                  |
+| Method                 | Description                                    |
+|------------------------|------------------------------------------------|
+| `async process(...)`   | Process a user input                           |
+| `async aclose()`       | Close the agent and release resources          |
+| `format_llm_message()` | Override to customize LLM message content      |
+| `format_ui_message()`  | Override to customize UI message content       |
+| `async __aenter__()`   | Context manager entry                          |
+| `async __aexit__(...)`| Context manager exit                           |
 
 ### `shutdown()`
 

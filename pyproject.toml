@@ -60,21 +60,12 @@ pyaiagent = ["py.typed"]
 #Before each release:
 #[ ] Update __version__ in src/pyaiagent/__init__.py
 #[ ] Update version in pyproject.toml
+#[ ] Add: git add pyproject.toml
+#[ ] Add: git add src/pyaiagent/__init__.py
 #[ ] Commit: git commit -m "Bump version to X.Y.Z"
 #[ ] Tag: git tag -a vX.Y.Z -m "Release X.Y.Z"
 #[ ] Push: git push && git push --tags
 #[ ] Publish: python -m build && twine upload dist/*
-
-## 1. Make sure everything is committed
-#git add .
-#git commit -m "Prepare release v0.1.0"
-#
-## 2. Create a tag
-#git tag -a v0.1.0 -m "Initial release"
-#
-## 3. Push code and tag
-#git push origin master
-#git push origin v0.1.0
 
 #Future workflow:
 #Develop on master (or use feature branches for big changes)
