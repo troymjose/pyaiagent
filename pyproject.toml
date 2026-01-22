@@ -65,26 +65,8 @@ pyaiagent = ["py.typed"]
 #[ ] Commit: git commit -m "Bump version to X.Y.Z"
 #[ ] Tag: git tag -a vX.Y.Z -m "Release X.Y.Z"
 #[ ] Push: git push && git push --tags
-#[ ] Publish: python -m build && twine upload dist/*
-
-#Future workflow:
-#Develop on master (or use feature branches for big changes)
-#When ready to release → create a new tag (v0.2.0, etc.)
-#Push tag → publish to PyPI
-#📋 Version Bumping Checklist
-
-
-# 1️⃣ Clean old builds:
-# rm -rf dist/ build/
-#
-# 2️⃣ Build wheels (modern format):
-# python -m build
-#
-# 3️⃣ Test installation:
-# pip install dist/pyaiagent-0.1.2-py3-none-any.whl
-#
-# 4️⃣ Verify:
-# python -c "import pyaiagent; print(pyaiagent.__version__)"
-# Upload:
-# twine upload dist/*
-
+#[ ] Clean old builds: rm -rf dist/ build/
+#[ ] Build wheels (modern format): python -m build
+#[ ] Test installation: pip install dist/pyaiagent-0.1.3-py3-none-any.whl
+#[ ] Verify:python -c "import pyaiagent; print(pyaiagent.__version__)"
+#[ ] Publish: twine upload dist/*
