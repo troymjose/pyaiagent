@@ -60,7 +60,6 @@ pyaiagent = ["py.typed"]
 #Before each release:
 #[ ] Update __version__ in src/pyaiagent/__init__.py
 #[ ] Update version in pyproject.toml
-#[ ] Update Test installation version in pyproject.toml (pip install dist/pyaiagent-<VERSION>-py3-none-any.whl)
 #[ ] Add: git add pyproject.toml
 #[ ] Add: git add src/pyaiagent/__init__.py
 #[ ] Commit: git commit -m "Bump version to X.Y.Z"
@@ -68,6 +67,6 @@ pyaiagent = ["py.typed"]
 #[ ] Push: git push && git push --tags
 #[ ] Clean old builds: rm -rf dist/ build/
 #[ ] Build wheels (modern format): python -m build
-#[ ] Test installation: pip install dist/pyaiagent-0.1.5-py3-none-any.whl
+#[ ] Test installation: pip install dist/pyaiagent-X.Y.Z-py3-none-any.whl
 #[ ] Verify:python -c "import pyaiagent; print(pyaiagent.__version__)"
 #[ ] Publish: twine upload dist/*
