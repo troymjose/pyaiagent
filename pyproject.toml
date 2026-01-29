@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyaiagent"
-version = "0.1.4"
+version = "0.1.5"
 description = "PyAiAgent is a modern, fast (high-performance), async framework for building AI agents with pythonic code."
 readme = "README.md"
 license = { text = "MIT" }
@@ -60,6 +60,7 @@ pyaiagent = ["py.typed"]
 #Before each release:
 #[ ] Update __version__ in src/pyaiagent/__init__.py
 #[ ] Update version in pyproject.toml
+#[ ] Update Test installation version in pyproject.toml (pip install dist/pyaiagent-<VERSION>-py3-none-any.whl)
 #[ ] Add: git add pyproject.toml
 #[ ] Add: git add src/pyaiagent/__init__.py
 #[ ] Commit: git commit -m "Bump version to X.Y.Z"
