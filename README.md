@@ -248,6 +248,8 @@ class MyAgent(OpenAIAgent):
 
 ### OpenAI Client Configuration
 
+#### Using Environment Variables
+
 The agent uses the standard OpenAI environment variables:
 
 ```bash
@@ -262,12 +264,94 @@ export OPENAI_TIMEOUT="60"                          # Request timeout (seconds)
 export OPENAI_MAX_RETRIES="3"                       # Max retry attempts
 ```
 
-**Using Azure OpenAI:**
+#### Programmatic Configuration
+
+For full control over the OpenAI client, use `set_default_openai_client()` to pass a pre-configured `AsyncOpenAI` client:
+
+```python
+from openai import AsyncOpenAI
+from pyaiagent import set_default_openai_client, OpenAIAgent
+
+# Create a custom client with full control over all parameters
+custom_client = AsyncOpenAI(
+    api_key="sk-...",
+    base_url="https://your-proxy.com/v1",
+    timeout=60.0,
+    max_retries=3,
+)
+
+# Set it as the default for all agents
+set_default_openai_client(custom_client)
+
+
+# Now create and use agents - they'll use this client
+class MyAgent(OpenAIAgent):
+    """You are a helpful assistant."""
+
+
+agent = MyAgent()
+result = await agent.process(input="Hello!")
+```
+
+**Important:** Call `set_default_openai_client()` **before** using any agent. Once an agent makes its first request, the client is locked in for that event loop.
+
+This approach gives you access to **all** `AsyncOpenAI` parameters, including:
+
+| Parameter | Description |
+|-----------|-------------|
+| `api_key` | API key (string or async callable) |
+| `organization` | Organization ID |
+| `project` | Project ID |
+| `base_url` | Custom API endpoint (proxies, Azure, local LLMs) |
+| `timeout` | Request timeout (seconds or `Timeout` object) |
+| `max_retries` | Max retry attempts |
+| `default_headers` | Custom headers for all requests |
+| `http_client` | Custom `httpx.AsyncClient` for advanced networking |
+
+#### Using Azure OpenAI
+
+**Option 1: Environment Variables**
 
 ```bash
 export OPENAI_API_KEY="your-azure-key"
 export OPENAI_BASE_URL="https://your-resource.openai.azure.com/openai/deployments/your-deployment"
-export OPENAI_API_VERSION="2024-02-01"              # Azure API version
+export OPENAI_API_VERSION="2024-02-01"
+```
+
+**Option 2: Programmatic**
+
+```python
+from openai import AsyncAzureOpenAI
+from pyaiagent import set_default_openai_client
+
+azure_client = AsyncAzureOpenAI(
+    api_key="your-azure-key",
+    api_version="2024-02-01",
+    azure_endpoint="https://your-resource.openai.azure.com",
+)
+
+set_default_openai_client(azure_client)
+```
+
+#### Using Local LLMs (Ollama, LM Studio, etc.)
+
+```python
+from openai import AsyncOpenAI
+from pyaiagent import set_default_openai_client
+
+# Ollama
+client = AsyncOpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama",  # Required but not used
+)
+set_default_openai_client(client)
+
+
+class MyAgent(OpenAIAgent):
+    """You are a helpful assistant."""
+
+    class Config:
+        model = "llama3.2"  # Use your local model name
 ```
 
 ---
@@ -691,6 +775,42 @@ Base class for all agents.
 | `format_ui_message()`  | Override to customize UI message content       |
 | `async __aenter__()`   | Context manager entry                          |
 | `async __aexit__(...)`| Context manager exit                           |
+
+### `set_default_openai_client(client)`
+
+Set a custom `AsyncOpenAI` client for all agents to use.
+
+```python
+from openai import AsyncOpenAI
+from pyaiagent import set_default_openai_client
+
+client = AsyncOpenAI(api_key="sk-...", base_url="https://...")
+set_default_openai_client(client)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `client` | `AsyncOpenAI` | A configured OpenAI client instance |
+
+- Must be called **before** any agent is used
+- Gives full control over all client parameters
+- Works with `AsyncOpenAI`, `AsyncAzureOpenAI`, or compatible clients
+
+### `get_default_openai_client()`
+
+Get the currently configured default client (if any).
+
+```python
+from pyaiagent import get_default_openai_client
+
+client = get_default_openai_client()
+if client:
+    print("Custom client is configured")
+else:
+    print("Using default client")
+```
+
+Returns `AsyncOpenAI | None`.
 
 ### `shutdown()`
 

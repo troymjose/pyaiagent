@@ -67,6 +67,6 @@ pyaiagent = ["py.typed"]
 #[ ] Push: git push && git push --tags
 #[ ] Clean old builds: rm -rf dist/ build/
 #[ ] Build wheels (modern format): python -m build
-#[ ] Test installation: pip install dist/pyaiagent-0.1.3-py3-none-any.whl
+#[ ] Test installation: pip install dist/pyaiagent-0.1.5-py3-none-any.whl
 #[ ] Verify:python -c "import pyaiagent; print(pyaiagent.__version__)"
 #[ ] Publish: twine upload dist/*

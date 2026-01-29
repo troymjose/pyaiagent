@@ -63,6 +63,7 @@ uvicorn examples.06_fastapi_basic:app --reload
 | [`10_context_manager.py`](10_context_manager.py) | Async context managers | `async with`, cleanup, pipelines |
 | [`11_message_formatting.py`](11_message_formatting.py) | Token optimization hooks | `format_llm_message`, `format_ui_message` |
 | [`12_dependency_injection.py`](12_dependency_injection.py) | Injecting services via `__init__` | DB clients, API clients, testing |
+| [`13_custom_client.py`](13_custom_client.py) | Custom OpenAI client configuration | `set_default_openai_client`, Azure, Ollama, proxies |
 
 ---
 
@@ -160,6 +161,44 @@ class MyAgent(OpenAIAgent):
 agent = MyAgent(db_client=my_database)
 ```
 
+### Custom OpenAI Client
+
+```python
+from openai import AsyncOpenAI
+from pyaiagent import set_default_openai_client
+
+# Configure before using any agent
+client = AsyncOpenAI(
+    api_key="sk-...",
+    base_url="https://your-proxy.com/v1",  # Custom endpoint
+    timeout=60.0,
+    max_retries=3,
+)
+set_default_openai_client(client)
+
+# Now agents will use this client
+agent = MyAgent()
+```
+
+### Local LLMs (Ollama)
+
+```python
+from openai import AsyncOpenAI
+from pyaiagent import set_default_openai_client
+
+client = AsyncOpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama",
+)
+set_default_openai_client(client)
+
+class MyAgent(OpenAIAgent):
+    """You are helpful."""
+    
+    class Config:
+        model = "llama3.2"  # Your local model
+```
+
 ---
 
 ## Learning Path
@@ -180,6 +219,7 @@ agent = MyAgent(db_client=my_database)
 - `09_inheritance_composition.py` — agent hierarchies
 - `11_message_formatting.py` — token optimization
 - `12_dependency_injection.py` — DB/API client injection
+- `13_custom_client.py` — Azure, Ollama, proxies, custom endpoints
 
 ---
 
