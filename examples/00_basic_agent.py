@@ -44,7 +44,6 @@ class FriendlyAssistant(OpenAIAgent):
     You always respond in a warm, encouraging tone.
     Keep your answers concise but informative.
     """
-    pass  # No extra code needed for a basic agent!
 
 
 # =============================================================================

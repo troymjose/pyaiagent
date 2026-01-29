@@ -81,7 +81,6 @@ logger = logging.getLogger(__name__)
 
 class SimpleAgent(OpenAIAgent):
     """A simple helpful assistant."""
-    pass
 
 
 class DynamicAgent(OpenAIAgent):
@@ -89,7 +88,6 @@ class DynamicAgent(OpenAIAgent):
     You are a support agent for {company_name}.
     Today's promotion: {promotion}
     """
-    pass
 
 
 class LoopyAgent(OpenAIAgent):

@@ -94,7 +94,6 @@ class MyAgent(OpenAIAgent):
     You are a friendly assistant who helps users with their questions.
     Always be polite and helpful.
     """
-    pass
 ```
 
 That's it! The docstring becomes your agent's instructions.

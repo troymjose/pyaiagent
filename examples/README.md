@@ -76,7 +76,6 @@ from pyaiagent import OpenAIAgent
 
 class MyAgent(OpenAIAgent):
     """You are a helpful assistant."""
-    pass
 
 agent = MyAgent()
 result = await agent.process(input="Hello!")

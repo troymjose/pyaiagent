@@ -40,7 +40,6 @@ class ConversationalAssistant(OpenAIAgent):
     When the user asks about something they mentioned earlier, recall it accurately.
     Be warm and personable in your responses.
     """
-    pass
 
 
 # =============================================================================
