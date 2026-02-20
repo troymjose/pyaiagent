@@ -288,7 +288,19 @@ class PersonalizedAgent(OpenAIAgent):
 
 # Same agent instance, different context per request
 agent = PersonalizedAgent()
+```
 
+**Placeholder behavior:** By default, unmatched `{placeholders}` are left as-is. This is safe for instructions containing example formats. To require all placeholders:
+
+```python
+class StrictAgent(OpenAIAgent):
+    """You are helping {user_name}."""
+
+    class Config:
+        strict_instruction_params = True  # Raises InstructionKeyError if missing
+```
+
+```python
 # Request from User A
 result = await agent.process(
     input="What should I do today?",

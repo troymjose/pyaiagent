@@ -28,3 +28,4 @@ class OpenAIAgentConfig:
     llm_timeout: float = 120.0
     ui_messages_enabled: bool = True
     llm_messages_enabled: bool = True
+    strict_instruction_params: bool = False

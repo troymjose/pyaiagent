@@ -251,9 +251,14 @@ if __name__ == "__main__":
 #    Good: {user_name}, {company_policy}, {current_date}
 #    Bad:  {x}, {p1}, {thing}
 #
-# 2. PROVIDE COMPLETE VALUES
-#    If a placeholder is in the docstring, you MUST provide it in
-#    instruction_params, or you'll get an InstructionKeyError.
+# 2. PLACEHOLDER BEHAVIOR
+#    By default, unmatched {placeholders} are left as-is (safe for
+#    instructions with example formats or code snippets).
+#
+#    To enforce that all placeholders must be provided, enable strict mode:
+#
+#    class Config:
+#        strict_instruction_params = True  # Raises InstructionKeyError if missing
 #
 # 3. KEEP INSTRUCTIONS STRUCTURED
 #    Format your docstring clearly with sections:

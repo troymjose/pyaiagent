@@ -68,7 +68,7 @@ logger = logging.getLogger(__name__)
 # │ InvalidMetadataError           │ `metadata` is not a dict                      │
 # │ InvalidLlmMessagesError        │ `llm_messages` is not a list                  │
 # │ InvalidInstructionParamsError  │ `instruction_params` is not a dict            │
-# │ InstructionKeyError            │ Missing key in instruction_params             │
+# │ InstructionKeyError            │ Missing key (only if strict_instruction_params) │
 # │ ClientError                    │ OpenAI API error (network, auth, rate limit)  │
 # │ MaxStepsExceededError          │ Agent exceeded max_steps (possible loop)      │
 # │ OpenAIAgentClosedError         │ Agent used after aclose() was called          │
@@ -88,6 +88,9 @@ class DynamicAgent(OpenAIAgent):
     You are a support agent for {company_name}.
     Today's promotion: {promotion}
     """
+
+    class Config:
+        strict_instruction_params = True  # Raise error if placeholders are missing
 
 
 class LoopyAgent(OpenAIAgent):

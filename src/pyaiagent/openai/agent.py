@@ -292,9 +292,10 @@ class OpenAIAgent:
     def _format_instruction(self, instruction_params: Dict[str, str] | None = None) -> str:
         """ Format instruction template with provided parameters. """
         instruction = self.__instruction__
+        strict_mode = self.__config_kwargs__.get("strict_instruction_params", False)
 
-        # Fast path: no params, return as-is
-        if not instruction_params:
+        # Fast path: no params and not strict, return as-is
+        if not instruction_params and not strict_mode:
             return instruction
 
         # Replace only valid {identifier} placeholders, leaving JSON braces untouched
@@ -308,11 +309,15 @@ class OpenAIAgent:
                 return f'{{{key}}}'
 
             # Normal placeholder: {name} → value
-            if key in instruction_params:
+            if instruction_params and key in instruction_params:
                 return f'{prefix}{instruction_params[key]}{suffix}'
 
-            # Key looks like a placeholder but wasn't provided - raise error
-            raise KeyError(key)
+            # Key looks like a placeholder but wasn't provided
+            if strict_mode:
+                raise KeyError(key)
+
+            # Non-strict mode: leave unmatched placeholders as-is
+            return match.group(0)
 
         try:
             # Match optional surrounding braces + identifier + optional surrounding braces

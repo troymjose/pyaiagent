@@ -124,6 +124,11 @@ class OpenAIAgentConfigManager:
             errors.append(f"Field 'llm_messages_enabled' must be a bool, got {type(value).__name__}.")
 
     @staticmethod
+    def _validate_strict_instruction_params(value, errors):
+        if not isinstance(value, bool):
+            errors.append(f"Field 'strict_instruction_params' must be a bool, got {type(value).__name__}.")
+
+    @staticmethod
     def _validate_config_kwargs(config_kwargs: dict[str, Any]) -> list[str]:
         """ Validate merged config kwargs. """
 

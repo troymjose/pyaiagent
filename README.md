@@ -46,9 +46,158 @@ result = await agent.process(input="Did I just build an AI agent in 2 lines?")
 - No magic – no decorators, no YAML, no custom DSL.
 - Async‑native – designed for asyncio, FastAPI, and modern Python apps.
 
+### See the Difference
+
+Here's a weather agent with one tool. First, without pyaiagent:
+
+<details>
+<summary><b>Without pyaiagent — Raw OpenAI API (~50 lines)</b></summary>
+
+```python
+import asyncio
+import json
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI()
+
+# Manual tool schema — you write this for every tool
+tools = [{
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "Get the current weather for a city.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "city": {"type": "string", "description": "The city name"}
+            },
+            "required": ["city"]
+        }
+    }
+}]
+
+
+def get_weather(city: str) -> dict:
+    return {"city": city, "temperature": "22°C", "condition": "Sunny"}
+
+
+async def run_agent(user_input: str) -> str:
+    messages = [
+        {"role": "system", "content": "You are a weather assistant."},
+        {"role": "user", "content": user_input}
+    ]
+
+    while True:
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            tools=tools
+        )
+
+        message = response.choices[0].message
+
+        if message.tool_calls:
+            messages.append(message)
+            for tool_call in message.tool_calls:
+                args = json.loads(tool_call.function.arguments)
+                result = get_weather(**args)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result)
+                })
+        else:
+            return message.content
+
+
+asyncio.run(run_agent("What's the weather in Paris?"))
+```
+
+</details>
+
+**With pyaiagent — 8 lines:**
+
+```python
+import asyncio
+from pyaiagent import OpenAIAgent
+
+
+class WeatherAgent(OpenAIAgent):
+    """You are a weather assistant."""
+
+    async def get_weather(self, city: str) -> dict:
+        """Get the current weather for a city."""
+        return {"city": city, "temperature": "22°C", "condition": "Sunny"}
+
+
+asyncio.run(WeatherAgent().process(input="What's the weather in Paris?"))
+```
+
+### How 45 Lines Became 8
+
+Here's exactly what pyaiagent handles for you:
+
+| What You Write | What pyaiagent Does For You |
+|----------------|---------------------------|
+| `class WeatherAgent(OpenAIAgent):` | Creates the agent with all OpenAI wiring |
+| `"""You are a weather assistant."""` | Becomes the system prompt — no `{"role": "system", ...}` dict |
+| `async def get_weather(self, city: str)` | Auto-generates the full JSON Schema from type hints |
+| `"""Get the current weather..."""` | Becomes the tool description — no manual schema writing |
+| `await agent.process(input=...)` | Runs the entire agentic loop — tool detection, execution, response |
+
+**The agentic loop alone saves ~20 lines.** pyaiagent handles:
+- Detecting when the AI wants to call tools
+- Parsing tool call arguments from JSON
+- Executing your tool methods (async or sync)
+- Running multiple tools in parallel when the AI requests them
+- Formatting results back to the AI
+- Looping until the AI produces a final response
+- Token counting, error handling, and timeouts
+
+### Simply Pythonic, Fully Flexible
+
+pyaiagent removes boilerplate, **not capabilities**. You still have full access to everything:
+
+```python
+class MyAgent(OpenAIAgent):
+    """You are a helpful assistant for {user_name}."""  # Dynamic instructions
+
+    class Config:
+        model = "gpt-4o"              # Any OpenAI model
+        temperature = 0.7             # All generation parameters
+        max_output_tokens = 4096      # Response length control
+        tool_timeout = 60.0           # Per-tool timeout
+        parallel_tool_calls = True    # Parallel execution
+
+    def __init__(self, db):           # Dependency injection
+        super().__init__()
+        self.db = db
+
+    async def query(self, sql: str) -> dict:  # Tools are just methods
+        """Run a database query."""
+        return await self.db.execute(sql)
+```
+
+**What makes it Pythonic:**
+- **Classes** — Agents are classes, not decorated functions or YAML configs
+- **Docstrings** — Instructions and tool descriptions are docstrings, not string constants
+- **Type hints** — Parameter types are Python types, not JSON Schema
+- **Inheritance** — Build specialized agents from base agents using normal inheritance
+- **`async`/`await`** — Native async, not callbacks or bolted-on wrappers
+
+**What you're NOT giving up:**
+- Custom OpenAI clients (Azure, proxies, local LLMs)
+- Structured outputs with Pydantic models
+- Multi-turn conversation memory
+- Dependency injection for databases, APIs, etc.
+- Full control over message formatting
+- Access to token usage, step counts, and metadata
+
+The raw OpenAI API is powerful. pyaiagent just removes the parts you rewrite for every agent.
+
 | Feature                  | pyaiagent                             | Other Frameworks                 |
 |--------------------------|---------------------------------------|----------------------------------|
-| Lines to define an agent | ~10                                   | ~50+                             |
+| Lines to define an agent | ~8                                    | ~45+                             |
 | Learning curve           | Minutes                               | Hours/Days                       |
 | Pythonic                 | Yes — classes, docstrings, type hints | Custom DSLs, decorators, configs |
 | Decorators needed        | None                                  | Many                             |
@@ -230,20 +379,21 @@ class MyAgent(OpenAIAgent):
 
 ### All Configuration Options
 
-| Option                | Type        | Default         | Description                                   |
-|-----------------------|-------------|-----------------|-----------------------------------------------|
-| `model`               | `str`       | `"gpt-4o-mini"` | OpenAI model ID                               |
-| `temperature`         | `float`     | `0.2`           | Response randomness (0.0-2.0)                 |
-| `top_p`               | `float`     | `None`          | Nucleus sampling (alternative to temperature) |
-| `max_output_tokens`   | `int`       | `4096`          | Maximum tokens in response                    |
-| `seed`                | `int`       | `None`          | For reproducible outputs                      |
-| `tool_choice`         | `str`       | `"auto"`        | `"auto"`, `"none"`, or `"required"`           |
-| `parallel_tool_calls` | `bool`      | `True`          | Allow multiple tools at once                  |
-| `max_steps`           | `int`       | `10`            | Max tool-call rounds per request              |
-| `max_parallel_tools`  | `int`       | `10`            | Concurrency limit for tool execution          |
-| `tool_timeout`        | `float`     | `30.0`          | Timeout per tool call (seconds)               |
-| `llm_timeout`         | `float`     | `120.0`         | Timeout for LLM response (seconds)            |
-| `text_format`         | `BaseModel` | `None`          | Pydantic model for structured output          |
+| Option                      | Type        | Default         | Description                                        |
+|-----------------------------|-------------|-----------------|---------------------------------------------------|
+| `model`                     | `str`       | `"gpt-4o-mini"` | OpenAI model ID                                   |
+| `temperature`               | `float`     | `0.2`           | Response randomness (0.0-2.0)                     |
+| `top_p`                     | `float`     | `None`          | Nucleus sampling (alternative to temperature)     |
+| `max_output_tokens`         | `int`       | `4096`          | Maximum tokens in response                        |
+| `seed`                      | `int`       | `None`          | For reproducible outputs                          |
+| `tool_choice`               | `str`       | `"auto"`        | `"auto"`, `"none"`, or `"required"`               |
+| `parallel_tool_calls`       | `bool`      | `True`          | Allow multiple tools at once                      |
+| `max_steps`                 | `int`       | `10`            | Max tool-call rounds per request                  |
+| `max_parallel_tools`        | `int`       | `10`            | Concurrency limit for tool execution              |
+| `tool_timeout`              | `float`     | `30.0`          | Timeout per tool call (seconds)                   |
+| `llm_timeout`               | `float`     | `120.0`         | Timeout for LLM response (seconds)                |
+| `text_format`               | `BaseModel` | `None`          | Pydantic model for structured output              |
+| `strict_instruction_params` | `bool`      | `False`         | Raise error on missing `{placeholder}` params     |
 
 ### OpenAI Client Configuration
 
@@ -482,6 +632,34 @@ result = await agent.process(
 )
 ```
 
+### Placeholder Behavior
+
+By default, unmatched `{placeholders}` are left as-is. This is useful when your instructions contain example formats or code snippets:
+
+```python
+class MyAgent(OpenAIAgent):
+    """
+    You are an assistant for {user_name}.
+    Return responses in this format: {field}: value
+    """
+
+# Only {user_name} is replaced; {field} stays as literal text
+result = await agent.process(
+    input="Hello",
+    instruction_params={"user_name": "Alice"}
+)
+```
+
+To enforce that all placeholders must be provided, enable strict mode:
+
+```python
+class StrictAgent(OpenAIAgent):
+    """You are an assistant for {user_name}."""
+
+    class Config:
+        strict_instruction_params = True  # Raises InstructionKeyError if {user_name} is missing
+```
+
 ---
 
 ## Dependency Injection
@@ -602,7 +780,7 @@ except OpenAIAgentProcessError as e:
 | `InvalidMetadataError`          | `metadata` is not a dict                            |
 | `InvalidLlmMessagesError`       | `llm_messages` is not a list                        |
 | `InvalidInstructionParamsError` | `instruction_params` is not a dict                  |
-| `InstructionKeyError`           | Missing key in `instruction_params` for placeholder |
+| `InstructionKeyError`           | Missing placeholder key (only if `strict_instruction_params`) |
 | `ClientError`                   | OpenAI API returned an error                        |
 | `MaxStepsExceededError`         | Agent exceeded `max_steps` without completing       |
 | `OpenAIAgentClosedError`        | Agent used after `aclose()` called                  |
