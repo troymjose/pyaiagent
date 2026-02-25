@@ -36,7 +36,7 @@ classifiers = [
     "Framework :: AsyncIO",
 ]
 dependencies = [
-    "openai>=1.0.0",
+    "openai>=1.0.0,<2.0",
     "orjson>=3.9.0",
 ]
 
