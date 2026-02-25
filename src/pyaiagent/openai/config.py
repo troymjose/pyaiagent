@@ -29,3 +29,4 @@ class OpenAIAgentConfig:
     ui_messages_enabled: bool = True
     llm_messages_enabled: bool = True
     strict_instruction_params: bool = False
+    validation_retries: int = 0

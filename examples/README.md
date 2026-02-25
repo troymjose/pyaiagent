@@ -64,6 +64,7 @@ uvicorn examples.06_fastapi_basic:app --reload
 | [`11_message_formatting.py`](11_message_formatting.py) | Token optimization hooks | `format_llm_message`, `format_ui_message` |
 | [`12_dependency_injection.py`](12_dependency_injection.py) | Injecting services via `__init__` | DB clients, API clients, testing |
 | [`13_custom_client.py`](13_custom_client.py) | Custom OpenAI client configuration | `set_default_openai_client`, Azure, Ollama, proxies |
+| [`14_validation_retries.py`](14_validation_retries.py) | Auto-retry on structured output validation failure | `validation_retries`, `ValidationRetriesExhaustedError`, messages cleanup |
 
 ---
 
@@ -125,6 +126,53 @@ for user_input in messages:
         llm_messages=llm_messages
     )
     llm_messages = result["messages"]["llm"]
+```
+
+**Two message lists, two purposes:**
+
+- `result["messages"]["llm"]` — Full accumulated conversation history. Pass to the next `process()` call for memory. In production, **overwrite** the session record each request. If validation retries occurred, retry artifacts are automatically cleaned — only the final valid response remains.
+- `result["messages"]["ui"]` — Current turn only (enriched with `agent`, `session`, `turn`, `step`, `tokens`). In production, **insert/append** to a messages collection each request. If validation retries occurred, all attempts (including failures) are preserved for debugging.
+
+**Production pattern (3 steps — load, process, save):**
+
+```python
+@app.post("/chat")
+async def chat(session_id: str, message: str):
+    llm_messages = await db.load_session(session_id)        # 1. LOAD
+
+    result = await agent.process(                            # 2. PROCESS
+        input=message, session=session_id, llm_messages=llm_messages
+    )
+
+    await db.save_session(session_id, result["messages"]["llm"])    # 3. SAVE (overwrite)
+    await db.insert_messages(session_id, result["messages"]["ui"])  #    (append)
+    return {"response": result["output"]}
+```
+
+### Validation Retries (Structured Output)
+
+Auto-retry when custom Pydantic validators fail — the LLM gets the errors and self-corrects:
+
+```python
+from pydantic import BaseModel, field_validator
+
+class StrictReview(BaseModel):
+    title: str
+    rating: int
+
+    @field_validator("rating")
+    @classmethod
+    def must_be_valid(cls, v):
+        if not 1 <= v <= 10:
+            raise ValueError("Rating must be between 1 and 10")
+        return v
+
+class ReviewAgent(OpenAIAgent):
+    """You are a movie critic."""
+
+    class Config:
+        text_format = StrictReview
+        validation_retries = 3  # 0 = disabled (default), for manual retry handling
 ```
 
 ### Message Formatting (Token Optimization)

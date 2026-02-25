@@ -8,6 +8,11 @@ from typing import Any, Awaitable, Dict, List, Optional, Iterable
 
 import httpx
 import orjson
+from pydantic import ValidationError as PydanticValidationError
+try:
+    from openai.lib._pydantic import to_strict_json_schema
+except ImportError:
+    to_strict_json_schema = None
 from openai.types.responses import ResponseFunctionToolCall, ResponseOutputMessage
 
 from pyaiagent.openai.config import OpenAIAgentConfig
@@ -15,14 +20,29 @@ from pyaiagent.openai.client import AsyncOpenAIClient
 from pyaiagent.openai.manager.tool import OpenAIAgentToolManager
 from pyaiagent.openai.manager.config import OpenAIAgentConfigManager
 from pyaiagent.openai.manager.instruction import OpenAIAgentInstructionManager
-from pyaiagent.openai.exceptions.process import InvalidInputError, InvalidSessionError, InvalidMetadataError, \
-    ClientError, \
+from pyaiagent.openai.exceptions.process import OpenAIAgentProcessError, InvalidInputError, InvalidSessionError, \
+    InvalidMetadataError, ClientError, \
     MaxStepsExceededError, InvalidLlmMessagesError, InvalidInstructionParamsError, InstructionKeyError, \
-    OpenAIAgentClosedError
+    OpenAIAgentClosedError, ValidationRetriesExhaustedError
 
 __all__ = ["OpenAIAgent"]
 
 logger = logging.getLogger(__name__)
+
+
+class _ResponseWithParsed:
+    """Proxy that enriches a responses.create() Response with manual Pydantic validation results.
+    Forwards all attribute access to the underlying response (usage, output, output_text, etc.)
+    while exposing output_parsed and validation_error from our own validation pass."""
+    __slots__ = ('_response', 'output_parsed', 'validation_error')
+
+    def __init__(self, response, output_parsed=None, validation_error=None):
+        self._response = response
+        self.output_parsed = output_parsed
+        self.validation_error = validation_error
+
+    def __getattr__(self, name):
+        return getattr(self._response, name)
 
 
 class OpenAIAgent:
@@ -33,7 +53,8 @@ class OpenAIAgent:
                  "_client",
                  "_semaphore",
                  "_static_openai_responses_api_kwargs",
-                 "_tool_functions")
+                 "_tool_functions",
+                 "_text_format_schema")
 
     def __init_subclass__(cls, **kwargs):
         """ Initialize subclass by preparing required components. """
@@ -67,6 +88,7 @@ class OpenAIAgent:
         self._semaphore = None
         self._static_openai_responses_api_kwargs = None
         self._tool_functions = None
+        self._text_format_schema = None
 
         return self
 
@@ -102,6 +124,26 @@ class OpenAIAgent:
             self._client = AsyncOpenAIClient().client
             # Build static openai responses api kwargs
             self._static_openai_responses_api_kwargs = self._build_static_openai_responses_api_kwargs()
+            # Pre-compute strict JSON schema for validation retries (avoids per-call overhead)
+            config = self._config
+            if config.text_format is not None and config.validation_retries > 0:
+                if to_strict_json_schema is None:
+                    msg = (
+                        "validation_retries requires 'openai.lib._pydantic.to_strict_json_schema' "
+                        "which is not available in your installed openai version. "
+                        "Please upgrade: pip install 'openai>=1.40.0,<2.0' "
+                        "and report this at https://github.com/troymjose/pyaiagent/issues"
+                    )
+                    logger.critical(msg)
+                    raise ImportError(msg)
+                self._text_format_schema = {
+                    "format": {
+                        "type": "json_schema",
+                        "name": config.text_format.__name__,
+                        "schema": to_strict_json_schema(config.text_format),
+                        "strict": True,
+                    }
+                }
             # Bind tool functions to self (convert class functions -> bound methods)
             self._tool_functions = {name: getattr(self, name) for name in self.__tool_names__}
             # Mark ready
@@ -207,20 +249,45 @@ class OpenAIAgent:
             if config.text_format is None:
                 return await asyncio.wait_for(self._client.responses.create(**kwargs), timeout=config.llm_timeout)
 
+            # Validation retries path: use create() so the response (with token
+            # usage) is always available, even when Pydantic validation fails.
+            if config.validation_retries > 0:
+                kwargs["text"] = self._text_format_schema
+                response = await asyncio.wait_for(
+                    self._client.responses.create(**kwargs), timeout=config.llm_timeout
+                )
+                output_parsed = None
+                validation_error = None
+                if response.output_text:
+                    try:
+                        output_parsed = config.text_format.model_validate_json(response.output_text)
+                    except PydanticValidationError as ve:
+                        validation_error = str(ve)
+                return _ResponseWithParsed(response, output_parsed, validation_error)
+
+            # No retries: use parse() for SDK-managed validation
             kwargs["text_format"] = config.text_format
             parse_response = await asyncio.wait_for(self._client.responses.parse(**kwargs),
                                                     timeout=config.llm_timeout)
+            # responses.parse() adds `parsed_arguments` to tool call items.
+            # Strip it so model_dump() won't include it when these items are
+            # round-tripped back to the API as conversation history.
             for parse_response_model in parse_response.output:
                 if hasattr(parse_response_model, "parsed_arguments"):
                     delattr(parse_response_model, "parsed_arguments")
             return parse_response
 
         except asyncio.CancelledError:
-            # Preserve cancellation semantics
             raise
 
         except httpx.HTTPError as exc:
             exc_msg = f"HTTP error during OpenAI call. Error: {exc}"
+            if logger.isEnabledFor(logging.ERROR):
+                logger.exception(exc_msg)
+            raise ClientError(agent_name=self.__agent_name__, message=exc_msg) from exc
+
+        except PydanticValidationError as exc:
+            exc_msg = f"Structured output validation failed. Error: {exc}"
             if logger.isEnabledFor(logging.ERROR):
                 logger.exception(exc_msg)
             raise ClientError(agent_name=self.__agent_name__, message=exc_msg) from exc
@@ -426,58 +493,93 @@ class OpenAIAgent:
 
         assistant_response: Optional[str] = None
         assistant_response_parsed: Optional[Any] = None
+        validation_attempts = 0
+        validation_retries_enabled = config.text_format is not None and config.validation_retries > 0
+        last_validation_error: Optional[str] = None
+        llm_msg_checkpoint: Optional[int] = None
 
-        for _ in range(config.max_steps):
-            response = await self._openai_responses_api_call(instruction=instruction,
-                                                             current_turn_llm_messages=current_turn_llm_messages)
-            # Cache frequently accessed attributes
-            usage = response.usage
-            response_output = response.output
+        try:
+            for _ in range(config.max_steps):
+                response = await self._openai_responses_api_call(instruction=instruction,
+                                                                 current_turn_llm_messages=current_turn_llm_messages)
 
-            input_tokens += usage.input_tokens
-            output_tokens += usage.output_tokens
-            total_tokens += usage.total_tokens
+                # Cache frequently accessed attributes
+                usage = response.usage
+                response_output = response.output
 
-            tool_calls = [item for item in response_output if isinstance(item, ResponseFunctionToolCall)]
+                input_tokens += usage.input_tokens
+                output_tokens += usage.output_tokens
+                total_tokens += usage.total_tokens
 
-            if config.llm_messages_enabled:
-                if not tool_calls and response.output_text:
-                    # Final text response - use hook for customizable content
-                    current_turn_llm_messages.append({"role": "assistant", "content": self.format_llm_message(response)})
-                else:
-                    # Has tool calls - preserve full structure for API compatibility
-                    current_turn_llm_messages.extend(item.model_dump() for item in response_output)
+                tool_calls = [item for item in response_output if isinstance(item, ResponseFunctionToolCall)]
 
-            # Final text response uses hook, tool calls preserve full structure
-            current_turn_ui_messages.extend(create_ui_messages(data={"role": "assistant",
-                                                                     "content": self.format_ui_message(response)} if not tool_calls and response.output_text else response_output,
-                                                               session=session,
-                                                               turn=turn,
-                                                               step=step,
-                                                               input_tokens=usage.input_tokens,
-                                                               output_tokens=usage.output_tokens,
-                                                               total_tokens=usage.total_tokens,
-                                                               metadata=metadata))
+                if config.llm_messages_enabled:
+                    if not tool_calls and response.output_text:
+                        current_turn_llm_messages.append({"role": "assistant", "content": self.format_llm_message(response)})
+                    else:
+                        current_turn_llm_messages.extend(item.model_dump() for item in response_output)
 
-            if not tool_calls:
-                assistant_response = getattr(response, "output_text", None)
-                assistant_response_parsed = getattr(response, "output_parsed", None)
-                break
-            step += 1
-            tool_execution_results: list = await self._execute_tool_calls(tool_calls=tool_calls)
-            if config.llm_messages_enabled:
-                current_turn_llm_messages.extend(tool_execution_results)
-            current_turn_ui_messages.extend(create_ui_messages(data=tool_execution_results,
-                                                               session=session,
-                                                               turn=turn,
-                                                               step=step,
-                                                               input_tokens=0,
-                                                               output_tokens=0,
-                                                               total_tokens=0,
-                                                               metadata=metadata))
+                current_turn_ui_messages.extend(create_ui_messages(data={"role": "assistant",
+                                                                         "content": self.format_ui_message(response)} if not tool_calls and response.output_text else response_output,
+                                                                   session=session,
+                                                                   turn=turn,
+                                                                   step=step,
+                                                                   input_tokens=usage.input_tokens,
+                                                                   output_tokens=usage.output_tokens,
+                                                                   total_tokens=usage.total_tokens,
+                                                                   metadata=metadata))
 
-        if assistant_response is None:
-            raise MaxStepsExceededError(agent_name=self.__agent_name__, max_steps=config.max_steps)
+                if not tool_calls:
+                    if validation_retries_enabled:
+                        output_parsed = getattr(response, "output_parsed", None)
+                        if output_parsed is None:
+                            if llm_msg_checkpoint is None:
+                                llm_msg_checkpoint = len(current_turn_llm_messages) - 1
+                            if validation_attempts < config.validation_retries:
+                                validation_attempts += 1
+                                error_detail = getattr(response, "validation_error", None) \
+                                    or "output could not be parsed into the expected format"
+                                last_validation_error = error_detail
+                                current_turn_llm_messages.append({
+                                    "role": "user",
+                                    "content": f"fix the errors:\n\n{error_detail}"
+                                })
+                                step += 1
+                                continue
+                            raise ValidationRetriesExhaustedError(
+                                agent_name=self.__agent_name__,
+                                validation_retries=config.validation_retries,
+                                errors=last_validation_error or "output_parsed is None"
+                            )
+
+                    # Clean up retry artifacts from llm messages (keep only the final valid response)
+                    if validation_attempts > 0 and llm_msg_checkpoint is not None:
+                        del current_turn_llm_messages[llm_msg_checkpoint:]
+                        if config.llm_messages_enabled:
+                            current_turn_llm_messages.append({"role": "assistant", "content": self.format_llm_message(response)})
+
+                    assistant_response = getattr(response, "output_text", None)
+                    assistant_response_parsed = getattr(response, "output_parsed", None)
+                    break
+                step += 1
+                tool_execution_results: list = await self._execute_tool_calls(tool_calls=tool_calls)
+                if config.llm_messages_enabled:
+                    current_turn_llm_messages.extend(tool_execution_results)
+                current_turn_ui_messages.extend(create_ui_messages(data=tool_execution_results,
+                                                                   session=session,
+                                                                   turn=turn,
+                                                                   step=step,
+                                                                   input_tokens=0,
+                                                                   output_tokens=0,
+                                                                   total_tokens=0,
+                                                                   metadata=metadata))
+
+            if assistant_response is None:
+                raise MaxStepsExceededError(agent_name=self.__agent_name__, max_steps=config.max_steps)
+
+        except OpenAIAgentProcessError as exc:
+            exc.tokens = {"input_tokens": input_tokens, "output_tokens": output_tokens, "total_tokens": total_tokens}
+            raise
 
         return {"input": input,
                 "session": session,

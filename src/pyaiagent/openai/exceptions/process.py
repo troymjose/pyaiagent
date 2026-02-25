@@ -7,11 +7,12 @@ __all__ = ["OpenAIAgentProcessError",
            "InvalidInstructionParamsError",
            "InstructionKeyError",
            "ClientError",
-           "MaxStepsExceededError", ]
+           "MaxStepsExceededError",
+           "ValidationRetriesExhaustedError", ]
 
 
 class OpenAIAgentProcessError(Exception):
-    pass
+    tokens = None
 
 
 class OpenAIAgentClosedError(OpenAIAgentProcessError):
@@ -57,3 +58,12 @@ class ClientError(OpenAIAgentProcessError):
 class MaxStepsExceededError(OpenAIAgentProcessError):
     def __init__(self, *, agent_name: str = "OpenAIAgent", max_steps: int = 10):
         super().__init__(f"{agent_name}: exceeded {max_steps} steps without completing")
+
+
+class ValidationRetriesExhaustedError(OpenAIAgentProcessError):
+    def __init__(self, *, agent_name: str = "OpenAIAgent", validation_retries: int = 0, errors: str = ""):
+        self.validation_errors = errors
+        super().__init__(
+            f"{agent_name}: structured output validation failed after {validation_retries} "
+            f"retry attempt(s). Last validation errors:\n{errors}"
+        )

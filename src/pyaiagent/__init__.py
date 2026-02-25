@@ -14,7 +14,8 @@ from pyaiagent.openai.exceptions.process import (OpenAIAgentProcessError,
                                                  InvalidInstructionParamsError,
                                                  InstructionKeyError,
                                                  ClientError,
-                                                 MaxStepsExceededError)
+                                                 MaxStepsExceededError,
+                                                 ValidationRetriesExhaustedError)
 
 __all__ = [
     # AI Agent
@@ -35,6 +36,7 @@ __all__ = [
     "InstructionKeyError",
     "ClientError",
     "MaxStepsExceededError",
+    "ValidationRetriesExhaustedError",
 ]
 
 __version__ = "0.1.6"

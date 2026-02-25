@@ -42,6 +42,7 @@ from pyaiagent import (
     InstructionKeyError,
     ClientError,
     MaxStepsExceededError,
+    ValidationRetriesExhaustedError,
 )
 
 
@@ -71,8 +72,17 @@ logger = logging.getLogger(__name__)
 # │ InstructionKeyError            │ Missing key (only if strict_instruction_params) │
 # │ ClientError                    │ OpenAI API error (network, auth, rate limit)  │
 # │ MaxStepsExceededError          │ Agent exceeded max_steps (possible loop)      │
+# │ ValidationRetriesExhaustedError│ Structured output validation failed after all │
+# │                                │ retry attempts (only if validation_retries>0) │
 # │ OpenAIAgentClosedError         │ Agent used after aclose() was called          │
 # └────────────────────────────────┴───────────────────────────────────────────────┘
+#
+# Token tracking on exceptions:
+#   All exceptions that inherit from OpenAIAgentProcessError carry a `tokens`
+#   attribute. For exceptions raised during processing (ClientError,
+#   MaxStepsExceededError, ValidationRetriesExhaustedError), `tokens` is a dict
+#   with input_tokens, output_tokens, and total_tokens consumed before the error.
+#   For input validation errors raised before any API call, `tokens` is None.
 
 
 # =============================================================================
@@ -323,20 +333,31 @@ async def safe_process(
             "error_code": "CONFIG_ERROR"
         }
 
-    except MaxStepsExceededError:
-        logger.warning(f"Max steps exceeded for: {user_input[:50]}...")
+    except MaxStepsExceededError as e:
+        logger.warning(f"Max steps exceeded for: {user_input[:50]}... | tokens: {e.tokens}")
         return {
             "success": False,
             "error": "Request too complex. Try breaking it into smaller questions.",
-            "error_code": "TOO_COMPLEX"
+            "error_code": "TOO_COMPLEX",
+            "tokens": e.tokens
+        }
+
+    except ValidationRetriesExhaustedError as e:
+        logger.warning(f"Validation retries exhausted: {e.validation_errors[:100]} | tokens: {e.tokens}")
+        return {
+            "success": False,
+            "error": "Could not generate a valid response. Please try rephrasing.",
+            "error_code": "VALIDATION_FAILED",
+            "tokens": e.tokens
         }
 
     except ClientError as e:
-        logger.error(f"OpenAI API error: {e}")
+        logger.error(f"OpenAI API error: {e} | tokens: {e.tokens}")
         return {
             "success": False,
             "error": "AI service temporarily unavailable. Please retry.",
-            "error_code": "SERVICE_ERROR"
+            "error_code": "SERVICE_ERROR",
+            "tokens": e.tokens
         }
 
     except OpenAIAgentClosedError:
@@ -348,11 +369,12 @@ async def safe_process(
         }
 
     except OpenAIAgentProcessError as e:
-        logger.error(f"Unexpected agent error: {e}")
+        logger.error(f"Unexpected agent error: {e} | tokens: {e.tokens}")
         return {
             "success": False,
             "error": "An unexpected error occurred.",
-            "error_code": "UNKNOWN_ERROR"
+            "error_code": "UNKNOWN_ERROR",
+            "tokens": e.tokens
         }
 
 

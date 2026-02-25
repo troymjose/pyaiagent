@@ -394,6 +394,7 @@ class MyAgent(OpenAIAgent):
 | `llm_timeout`               | `float`     | `120.0`         | Timeout for LLM response (seconds)                |
 | `text_format`               | `BaseModel` | `None`          | Pydantic model for structured output              |
 | `strict_instruction_params` | `bool`      | `False`         | Raise error on missing `{placeholder}` params     |
+| `validation_retries`        | `int`       | `0`             | Retry count for structured output validation failures (0 = disabled) |
 
 ### OpenAI Client Configuration
 
@@ -541,6 +542,95 @@ print(f"Rating: {review.rating}/10")
 print(f"Recommended: {review.recommended}")
 ```
 
+### Validation Retries
+
+OpenAI's Structured Outputs guarantees JSON schema conformance, but **custom Pydantic validators** (business rules, cross-field checks, semantic constraints) can still fail. When they do, pyaiagent can automatically retry by sending the validation errors back to the LLM, giving it a chance to self-correct.
+
+```python
+from pydantic import BaseModel, field_validator
+from pyaiagent import OpenAIAgent
+
+
+class MovieReview(BaseModel):
+    title: str
+    rating: int
+    summary: str
+
+    @field_validator("rating")
+    @classmethod
+    def rating_must_be_valid(cls, v):
+        if not 1 <= v <= 10:
+            raise ValueError("Rating must be between 1 and 10")
+        return v
+
+    @field_validator("summary")
+    @classmethod
+    def summary_must_be_detailed(cls, v):
+        if len(v.split()) < 10:
+            raise ValueError("Summary must be at least 10 words")
+        return v
+
+
+class ReviewAgent(OpenAIAgent):
+    """You are a movie critic. Provide detailed, structured reviews."""
+
+    class Config:
+        text_format = MovieReview
+        validation_retries = 3  # Retry up to 3 times on validation failure
+```
+
+**How it works:**
+
+1. The LLM produces a structured response (JSON schema enforced with `strict: True`)
+2. Pydantic validates it (including your custom validators)
+3. If validation fails, the specific errors are sent back to the LLM for self-correction
+4. The LLM corrects its output and tries again
+5. This repeats up to `validation_retries` times
+6. If all retries are exhausted, `ValidationRetriesExhaustedError` is raised
+
+**Token tracking** is fully accurate during validation retries. Every retry attempt — including failed ones — contributes to the `input_tokens`, `output_tokens`, and `total_tokens` reported in the result (or on exceptions via `e.tokens`). This makes per-customer cost attribution reliable even in multi-tenant systems.
+
+**Configuration:**
+
+| Value | Behavior |
+|---|---|
+| `validation_retries = 0` | **Default.** No retries. Current behavior preserved. Use this if you handle retries yourself. |
+| `validation_retries = 3` | Retry up to 3 times. Recommended for most use cases. |
+
+**What happens to messages during retries:**
+
+Retry artifacts (failed responses and error feedback) are handled differently in each message list:
+
+- **`messages["llm"]`** — **Clean.** All retry artifacts are automatically removed before returning. The returned list looks as if the retry never happened — only the final valid response is included. This means no wasted tokens when you pass `llm_messages` to the next `process()` call.
+
+- **`messages["ui"]`** — **Full history preserved.** Every step is visible, including failed attempts. Each message has a `step` number, so you can see exactly which step was a retry. This is useful for debugging, analytics, and audit logs.
+
+```
+Example: validation_retries=3, fails once then succeeds
+
+messages["llm"] (returned to caller):
+  [...history, user_input, corrected_assistant]     ← clean, retry invisible
+
+messages["ui"] (returned to caller):
+  [{role: "user",      content: "Review Inception",    step: 1, tokens: {...}},
+   {role: "assistant", content: '{"rating": 0, ...}',  step: 1, tokens: {...}},  ← failed attempt
+   {role: "assistant", content: '{"rating": 8, ...}',  step: 2, tokens: {...}}]  ← corrected response
+```
+
+This separation ensures that the LLM never sees old validation noise in subsequent turns, while your application retains full visibility into agent behavior.
+
+**Error handling:**
+
+```python
+from pyaiagent import ValidationRetriesExhaustedError
+
+try:
+    result = await agent.process(input="Review Inception")
+except ValidationRetriesExhaustedError as e:
+    print(f"Validation failed after retries: {e}")
+    print(f"Last errors: {e.validation_errors}")
+```
+
 ---
 
 ## Sessions and Conversation Memory
@@ -583,6 +673,137 @@ for user_input in ["Hi, I'm Alice", "What's my name?", "Thanks!"]:
 
 **Token optimization:** When using structured outputs with large fields, conversation memory can grow quickly. Override `format_llm_message()` to control what gets stored. See [Best Practices #6](#6-customize-message-storage-token-optimization) for details.
 
+### Understanding `messages.llm` vs `messages.ui`
+
+Every `process()` call returns two message lists, each designed for a different purpose:
+
+| | `messages["llm"]` | `messages["ui"]` |
+|---|---|---|
+| **Contains** | Full accumulated conversation history | Only the current turn's messages |
+| **Purpose** | Feed back into the next `process()` call so the LLM has context | Display in chat UI, store as audit log |
+| **Grows across turns?** | Yes — includes all previous messages + current turn | No — always scoped to this single `process()` call |
+| **Validation retries** | Clean — retry artifacts are removed, only the final valid response is kept | Full history — shows all attempts including failures (with `step` numbers) |
+| **DB pattern** | **Overwrite** the session record each request | **Insert/append** to a messages collection each request |
+
+**`messages["llm"]`** is the LLM's working memory. It accumulates the full conversation (user messages, assistant responses, tool calls, tool results) because the OpenAI API needs the complete history to maintain context. When you pass it back via `llm_messages`, the agent picks up right where it left off. If validation retries occurred, the failed attempts and error feedback are automatically removed — only the final valid response remains, so no tokens are wasted in subsequent turns.
+
+**`messages["ui"]`** is your application's structured record of what happened in *this turn only*. Each message is enriched with metadata (`agent`, `session`, `turn`, `step`, `tokens`) making it ready for direct insertion into a database or display in a chat interface. If validation retries occurred, all attempts (including failures) are preserved for full debugging and analytics visibility.
+
+```
+Turn 1:  process(input="Hi, I'm Alice")
+         messages["llm"] = [user_msg_1, assistant_msg_1]          ← 2 messages
+         messages["ui"]  = [user_msg_1, assistant_msg_1]          ← 2 messages
+
+Turn 2:  process(input="What's my name?", llm_messages=...)
+         messages["llm"] = [user_1, asst_1, user_2, asst_2]      ← 4 messages (accumulated)
+         messages["ui"]  = [user_msg_2, assistant_msg_2]          ← 2 messages (current turn only)
+```
+
+### Production Session Management
+
+The agent is **stateless by design** — it never stores conversation history internally. This means session management in production is straightforward: just load and save a single JSON list per session.
+
+#### The Pattern (3 Steps)
+
+```python
+@app.post("/chat")
+async def chat(session_id: str, message: str):
+    # 1. LOAD — Get the conversation history for this session
+    llm_messages = await db.load_session(session_id)   # [] if new session
+
+    # 2. PROCESS — The agent handles everything
+    result = await agent.process(
+        input=message,
+        session=session_id,
+        llm_messages=llm_messages
+    )
+
+    # 3. SAVE — Overwrite llm, insert ui
+    await db.save_session(session_id, result["messages"]["llm"])    # Overwrite
+    await db.insert_messages(session_id, result["messages"]["ui"])  # Append
+
+    return {"response": result["output"]}
+```
+
+That's it. Three steps: **load, process, save**.
+
+#### Database Schema
+
+```
+sessions table (overwritten each request)
+┌──────────────┬──────────────────────────────┬────────────┐
+│ session_id   │ llm_messages (JSONB)         │ updated_at │
+│ "user-123"   │ [full conversation history]  │ 2025-01-15 │
+└──────────────┴──────────────────────────────┴────────────┘
+
+messages table (append-only, grows over time)
+┌────┬────────────┬──────┬──────┬──────┬──────────┬────────┐
+│ id │ session_id │ turn │ step │ role │ content  │ tokens │
+│ 1  │ user-123   │ t1   │ 1    │ user │ "Hi..."  │ {...}  │
+│ 2  │ user-123   │ t1   │ 1    │ asst │ "Hello!" │ {...}  │
+│ 3  │ user-123   │ t2   │ 1    │ user │ "Name?"  │ {...}  │  ← new turn appended
+│ 4  │ user-123   │ t2   │ 1    │ asst │ "Alice!" │ {...}  │
+└────┴────────────┴──────┴──────┴──────┴──────────┴────────┘
+```
+
+#### With Redis (Fast Sessions + TTL)
+
+```python
+import json
+import redis.asyncio as redis
+
+@app.post("/chat")
+async def chat(session_id: str, message: str):
+    # 1. LOAD
+    raw = await redis_client.get(f"session:{session_id}")
+    llm_messages = json.loads(raw) if raw else []
+
+    # 2. PROCESS
+    result = await agent.process(input=message, session=session_id, llm_messages=llm_messages)
+
+    # 3. SAVE — overwrite with TTL (auto-expires abandoned sessions)
+    await redis_client.setex(f"session:{session_id}", 3600, json.dumps(result["messages"]["llm"]))
+
+    return {"response": result["output"]}
+```
+
+#### With PostgreSQL (Persistent History)
+
+```python
+@app.post("/chat")
+async def chat(session_id: str, message: str):
+    # 1. LOAD
+    row = await db.fetchrow("SELECT llm_messages FROM sessions WHERE session_id = $1", session_id)
+    llm_messages = row["llm_messages"] if row else []
+
+    # 2. PROCESS
+    result = await agent.process(input=message, session=session_id, llm_messages=llm_messages)
+
+    # 3. SAVE — upsert session, insert UI messages
+    await db.execute("""
+        INSERT INTO sessions (session_id, llm_messages, updated_at) VALUES ($1, $2, NOW())
+        ON CONFLICT (session_id) DO UPDATE SET llm_messages = $2, updated_at = NOW()
+    """, session_id, json.dumps(result["messages"]["llm"]))
+
+    await db.executemany(
+        "INSERT INTO messages (session_id, data) VALUES ($1, $2)",
+        [(session_id, json.dumps(msg)) for msg in result["messages"]["ui"]]
+    )
+
+    return {"response": result["output"]}
+```
+
+#### Production Tips
+
+- **Limit conversation length** — The `llm_messages` list grows with every turn. Truncate old messages to control token usage:
+  ```python
+  MAX_MESSAGES = 40
+  if len(llm_messages) > MAX_MESSAGES:
+      llm_messages = llm_messages[-MAX_MESSAGES:]
+  ```
+- **Session expiry** — Use Redis TTL or a scheduled cleanup job to remove abandoned sessions.
+- **Concurrency** — If a session can receive concurrent requests, use a distributed lock to prevent race conditions.
+
 ### Response Structure
 
 ```python
@@ -599,8 +820,8 @@ result = {
         "total_tokens": 33
     },
     "messages": {
-        "llm": [...],  # Pass to next turn for memory
-        "ui": [...]    # Formatted for display
+        "llm": [...],  # Full conversation history — overwrite in DB, pass to next process()
+        "ui": [...]    # Current turn only — append to DB, display in chat UI
     },
     "metadata": {}
 }
@@ -762,28 +983,44 @@ agent = MyAgent()
 
 try:
     result = await agent.process(input="Hello")
-except MaxStepsExceededError:
-    print("Agent took too many steps")
+except MaxStepsExceededError as e:
+    print(f"Agent took too many steps | tokens consumed: {e.tokens}")
 except ClientError as e:
-    print(f"OpenAI API error: {e}")
+    print(f"OpenAI API error: {e} | tokens consumed: {e.tokens}")
 except OpenAIAgentProcessError as e:
     # Catches any other agent process error
     print(f"Agent error: {e}")
 ```
 
+### Token Tracking on Errors
+
+Every exception raised during processing carries a `tokens` attribute — a dict with `input_tokens`, `output_tokens`,
+and `total_tokens` consumed before the error occurred. This ensures you always have cost visibility, even on failure:
+
+```python
+try:
+    result = await agent.process(input="Complex question...")
+except OpenAIAgentProcessError as e:
+    print(e.tokens)
+    # {"input_tokens": 1250, "output_tokens": 340, "total_tokens": 1590}
+```
+
+For input validation errors raised before any API call (e.g., `InvalidInputError`), `tokens` is `None`.
+
 ### Exception Types
 
-| Exception                       | When                                                |
-|---------------------------------|-----------------------------------------------------|
-| `InvalidInputError`             | `input` is not a string                             |
-| `InvalidSessionError`           | `session` is empty or not a string                  |
-| `InvalidMetadataError`          | `metadata` is not a dict                            |
-| `InvalidLlmMessagesError`       | `llm_messages` is not a list                        |
-| `InvalidInstructionParamsError` | `instruction_params` is not a dict                  |
-| `InstructionKeyError`           | Missing placeholder key (only if `strict_instruction_params`) |
-| `ClientError`                   | OpenAI API returned an error                        |
-| `MaxStepsExceededError`         | Agent exceeded `max_steps` without completing       |
-| `OpenAIAgentClosedError`        | Agent used after `aclose()` called                  |
+| Exception                       | When                                                | `tokens` |
+|---------------------------------|-----------------------------------------------------|----------|
+| `InvalidInputError`             | `input` is not a string                             | `None`   |
+| `InvalidSessionError`           | `session` is empty or not a string                  | `None`   |
+| `InvalidMetadataError`          | `metadata` is not a dict                            | `None`   |
+| `InvalidLlmMessagesError`       | `llm_messages` is not a list                        | `None`   |
+| `InvalidInstructionParamsError` | `instruction_params` is not a dict                  | `None`   |
+| `InstructionKeyError`           | Missing placeholder key (only if `strict_instruction_params`) | `None` |
+| `ClientError`                   | OpenAI API returned an error                        | `dict`   |
+| `MaxStepsExceededError`         | Agent exceeded `max_steps` without completing       | `dict`   |
+| `ValidationRetriesExhaustedError` | Structured output validation failed after all retry attempts | `dict` |
+| `OpenAIAgentClosedError`        | Agent used after `aclose()` called                  | `None`   |
 
 ---
 
@@ -1045,8 +1282,8 @@ Returns a dictionary with:
         "total_tokens": 67
     },
     "messages": {
-        "llm": [...],                    # Pass to next process() for memory
-        "ui": [...]                      # Formatted for display/storage
+        "llm": [...],                    # Full history — overwrite in DB, pass to next process()
+        "ui": [...]                      # Current turn only — append to DB, display in chat UI
     },
     "metadata": {}                       # Your custom metadata
 }
@@ -1061,7 +1298,8 @@ Returns a dictionary with:
 | `turn`          | `str`             | Unique ID for this conversation turn            |
 | `steps`         | `int`             | Number of LLM ↔ tool rounds                     |
 | `tokens`        | `dict`            | Token usage breakdown                           |
-| `messages`      | `dict`            | LLM messages (for memory) and UI messages       |
+| `messages.llm`  | `list`            | Full accumulated conversation history — pass to next `process()` for memory, overwrite in DB per session |
+| `messages.ui`   | `list`            | Current turn messages only (enriched with `agent`, `session`, `turn`, `step`, `tokens`) — append to DB, display in UI |
 | `metadata`      | `dict`            | Custom metadata passed through                  |
 
 ---
