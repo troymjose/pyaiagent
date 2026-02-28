@@ -173,21 +173,21 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
         agent: ConversationalAssistant = req.app.state.agent
 
         # Retrieve existing conversation history (or empty list)
-        llm_messages = session_storage.get(request.session_id, [])
+        history = session_storage.get(request.session_id, [])
 
         # Process the message WITH conversation history
         result = await agent.process(
             input=request.message,
             session=request.session_id,
-            llm_messages=llm_messages  # ← This enables memory!
+            history=history  # ← This enables memory!
         )
 
         # Save the UPDATED conversation history
-        session_storage[request.session_id] = result["messages"]["llm"]
+        session_storage[request.session_id] = result["history"]
 
         # Count turns (user messages)
         turn_count = sum(
-            1 for msg in result["messages"]["llm"]
+            1 for msg in result["history"]
             if isinstance(msg, dict) and msg.get("role") == "user"
         )
 
@@ -329,8 +329,8 @@ if __name__ == "__main__":
 #    Truncate long conversations to control token usage:
 #
 #    MAX_MESSAGES = 20
-#    if len(llm_messages) > MAX_MESSAGES:
-#        llm_messages = llm_messages[-MAX_MESSAGES:]
+#    if len(history) > MAX_MESSAGES:
+#        history = history[-MAX_MESSAGES:]
 #
 # 4. RATE LIMITING
 #    Add rate limiting to prevent abuse:

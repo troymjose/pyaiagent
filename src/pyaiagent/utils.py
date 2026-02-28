@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import threading
 from weakref import WeakKeyDictionary
@@ -87,7 +89,44 @@ class PerEventLoopSingleton(type):
             cls._instances_per_loop.pop(loop, None)
             return True
 
+    def get_instance(
+        cls, loop: asyncio.AbstractEventLoop | None = None,
+    ) -> object | None:
+        """
+        Get the singleton instance for a specific event loop without creating one.
+
+        Args:
+            loop: The event loop to look up. Defaults to the current running loop.
+
+        Returns:
+            The singleton instance if one exists, ``None`` otherwise
+            (including when construction is in-progress or no loop is running).
+        """
+        if loop is None:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return None
+        with cls._lock:
+            existing = cls._instances_per_loop.get(loop)
+            if existing is _IN_PROGRESS:
+                return None
+            return existing
+
+    def iter_instances(cls) -> list[object]:
+        """
+        Return a snapshot list of all registered instances across all event loops.
+
+        Thread-safe. The returned list is a copy, safe to iterate outside the lock.
+        Excludes in-progress construction markers.
+        """
+        with cls._lock:
+            return [
+                inst for inst in cls._instances_per_loop.values()
+                if inst is not _IN_PROGRESS
+            ]
+
     def delete_all_instances(cls) -> None:
-        """ Testing/maintenance helper: clear the global instance registry """
+        """Testing/maintenance helper: clear the global instance registry."""
         with cls._lock:
             cls._instances_per_loop.clear()

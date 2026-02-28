@@ -72,7 +72,7 @@ async def main() -> None:
     #
     #   result["output"]              → The agent's text response (string)
     #   result["tokens"]              → Token usage for cost tracking
-    #   result["messages"]["llm"]     → Conversation history (for multi-turn)
+    #   result["history"]     → Conversation history (for multi-turn)
     #   result["session"]             → Session ID (auto-generated or provided)
     #   result["steps"]               → How many LLM calls were made
     #

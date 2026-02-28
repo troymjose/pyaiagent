@@ -601,17 +601,17 @@ class ReviewAgent(OpenAIAgent):
 
 Retry artifacts (failed responses and error feedback) are handled differently in each message list:
 
-- **`messages["llm"]`** — **Clean.** All retry artifacts are automatically removed before returning. The returned list looks as if the retry never happened — only the final valid response is included. This means no wasted tokens when you pass `llm_messages` to the next `process()` call.
+- **`history`** — **Clean.** All retry artifacts are automatically removed before returning. The returned list looks as if the retry never happened — only the final valid response is included. This means no wasted tokens when you pass `history` to the next `process()` call.
 
-- **`messages["ui"]`** — **Full history preserved.** Every step is visible, including failed attempts. Each message has a `step` number, so you can see exactly which step was a retry. This is useful for debugging, analytics, and audit logs.
+- **`messages`** — **Full history preserved.** Every step is visible, including failed attempts. Each message has a `step` number, so you can see exactly which step was a retry. This is useful for debugging, analytics, and audit logs.
 
 ```
 Example: validation_retries=3, fails once then succeeds
 
-messages["llm"] (returned to caller):
+history (returned to caller):
   [...history, user_input, corrected_assistant]     ← clean, retry invisible
 
-messages["ui"] (returned to caller):
+messages (returned to caller):
   [{role: "user",      content: "Review Inception",    step: 1, tokens: {...}},
    {role: "assistant", content: '{"rating": 0, ...}',  step: 1, tokens: {...}},  ← failed attempt
    {role: "assistant", content: '{"rating": 8, ...}',  step: 2, tokens: {...}}]  ← corrected response
@@ -648,7 +648,7 @@ result1 = await agent.process(input="My name is Alice")
 # Turn 2: Pass previous messages so the agent remembers
 result2 = await agent.process(
     input="What's my name?",
-    llm_messages=result1["messages"]["llm"]  # ← This enables memory
+    history=result1["history"]  # ← This enables memory
 )
 
 print(result2["output"])  # "Your name is Alice"
@@ -656,28 +656,28 @@ print(result2["output"])  # "Your name is Alice"
 
 **How it works:**
 
-1. `result1["messages"]["llm"]` contains the conversation history
-2. Pass it to the next `process()` call via `llm_messages`
+1. `result1["history"]` contains the conversation history
+2. Pass it to the next `process()` call via `history`
 3. The agent now "remembers" the previous conversation
 
 **Tip:** For longer conversations, keep updating the messages:
 
 ```python
-llm_messages = []
+history = []
 
 for user_input in ["Hi, I'm Alice", "What's my name?", "Thanks!"]:
-    result = await agent.process(input=user_input, llm_messages=llm_messages)
-    llm_messages = result["messages"]["llm"]
+    result = await agent.process(input=user_input, history=history)
+    history = result["history"]
     print(result["output"])
 ```
 
-**Token optimization:** When using structured outputs with large fields, conversation memory can grow quickly. Override `format_llm_message()` to control what gets stored. See [Best Practices #6](#6-customize-message-storage-token-optimization) for details.
+**Token optimization:** When using structured outputs with large fields, conversation memory can grow quickly. Override `format_history()` to control what gets stored. See [Best Practices #6](#6-customize-message-storage-token-optimization) for details.
 
-### Understanding `messages.llm` vs `messages.ui`
+### Understanding `history` vs `messages`
 
 Every `process()` call returns two message lists, each designed for a different purpose:
 
-| | `messages["llm"]` | `messages["ui"]` |
+| | `history` | `messages` |
 |---|---|---|
 | **Contains** | Full accumulated conversation history | Only the current turn's messages |
 | **Purpose** | Feed back into the next `process()` call so the LLM has context | Display in chat UI, store as audit log |
@@ -685,18 +685,18 @@ Every `process()` call returns two message lists, each designed for a different 
 | **Validation retries** | Clean — retry artifacts are removed, only the final valid response is kept | Full history — shows all attempts including failures (with `step` numbers) |
 | **DB pattern** | **Overwrite** the session record each request | **Insert/append** to a messages collection each request |
 
-**`messages["llm"]`** is the LLM's working memory. It accumulates the full conversation (user messages, assistant responses, tool calls, tool results) because the OpenAI API needs the complete history to maintain context. When you pass it back via `llm_messages`, the agent picks up right where it left off. If validation retries occurred, the failed attempts and error feedback are automatically removed — only the final valid response remains, so no tokens are wasted in subsequent turns.
+**`history`** is the LLM's working memory. It accumulates the full conversation (user messages, assistant responses, tool calls, tool results) because the OpenAI API needs the complete history to maintain context. When you pass it back via `history`, the agent picks up right where it left off. If validation retries occurred, the failed attempts and error feedback are automatically removed — only the final valid response remains, so no tokens are wasted in subsequent turns.
 
-**`messages["ui"]`** is your application's structured record of what happened in *this turn only*. Each message is enriched with metadata (`agent`, `session`, `turn`, `step`, `tokens`) making it ready for direct insertion into a database or display in a chat interface. If validation retries occurred, all attempts (including failures) are preserved for full debugging and analytics visibility.
+**`messages`** is your application's structured record of what happened in *this turn only*. Each message is enriched with metadata (`agent`, `session`, `turn`, `step`, `tokens`) making it ready for direct insertion into a database or display in a chat interface. If validation retries occurred, all attempts (including failures) are preserved for full debugging and analytics visibility.
 
 ```
 Turn 1:  process(input="Hi, I'm Alice")
-         messages["llm"] = [user_msg_1, assistant_msg_1]          ← 2 messages
-         messages["ui"]  = [user_msg_1, assistant_msg_1]          ← 2 messages
+         history = [user_msg_1, assistant_msg_1]          ← 2 messages
+         messages  = [user_msg_1, assistant_msg_1]          ← 2 messages
 
-Turn 2:  process(input="What's my name?", llm_messages=...)
-         messages["llm"] = [user_1, asst_1, user_2, asst_2]      ← 4 messages (accumulated)
-         messages["ui"]  = [user_msg_2, assistant_msg_2]          ← 2 messages (current turn only)
+Turn 2:  process(input="What's my name?", history=...)
+         history = [user_1, asst_1, user_2, asst_2]      ← 4 messages (accumulated)
+         messages  = [user_msg_2, assistant_msg_2]          ← 2 messages (current turn only)
 ```
 
 ### Production Session Management
@@ -709,18 +709,18 @@ The agent is **stateless by design** — it never stores conversation history in
 @app.post("/chat")
 async def chat(session_id: str, message: str):
     # 1. LOAD — Get the conversation history for this session
-    llm_messages = await db.load_session(session_id)   # [] if new session
+    history = await db.load_session(session_id)   # [] if new session
 
     # 2. PROCESS — The agent handles everything
     result = await agent.process(
         input=message,
         session=session_id,
-        llm_messages=llm_messages
+        history=history
     )
 
-    # 3. SAVE — Overwrite llm, insert ui
-    await db.save_session(session_id, result["messages"]["llm"])    # Overwrite
-    await db.insert_messages(session_id, result["messages"]["ui"])  # Append
+    # 3. SAVE — Overwrite history, insert messages
+    await db.save_session(session_id, result["history"])    # Overwrite
+    await db.insert_events(session_id, result["events"])      # Append
 
     return {"response": result["output"]}
 ```
@@ -732,7 +732,7 @@ That's it. Three steps: **load, process, save**.
 ```
 sessions table (overwritten each request)
 ┌──────────────┬──────────────────────────────┬────────────┐
-│ session_id   │ llm_messages (JSONB)         │ updated_at │
+│ session_id   │ history (JSONB)         │ updated_at │
 │ "user-123"   │ [full conversation history]  │ 2025-01-15 │
 └──────────────┴──────────────────────────────┴────────────┘
 
@@ -756,13 +756,13 @@ import redis.asyncio as redis
 async def chat(session_id: str, message: str):
     # 1. LOAD
     raw = await redis_client.get(f"session:{session_id}")
-    llm_messages = json.loads(raw) if raw else []
+    history = json.loads(raw) if raw else []
 
     # 2. PROCESS
-    result = await agent.process(input=message, session=session_id, llm_messages=llm_messages)
+    result = await agent.process(input=message, session=session_id, history=history)
 
     # 3. SAVE — overwrite with TTL (auto-expires abandoned sessions)
-    await redis_client.setex(f"session:{session_id}", 3600, json.dumps(result["messages"]["llm"]))
+    await redis_client.setex(f"session:{session_id}", 3600, json.dumps(result["history"]))
 
     return {"response": result["output"]}
 ```
@@ -773,21 +773,21 @@ async def chat(session_id: str, message: str):
 @app.post("/chat")
 async def chat(session_id: str, message: str):
     # 1. LOAD
-    row = await db.fetchrow("SELECT llm_messages FROM sessions WHERE session_id = $1", session_id)
-    llm_messages = row["llm_messages"] if row else []
+    row = await db.fetchrow("SELECT history FROM sessions WHERE session_id = $1", session_id)
+    history = row["history"] if row else []
 
     # 2. PROCESS
-    result = await agent.process(input=message, session=session_id, llm_messages=llm_messages)
+    result = await agent.process(input=message, session=session_id, history=history)
 
     # 3. SAVE — upsert session, insert UI messages
     await db.execute("""
-        INSERT INTO sessions (session_id, llm_messages, updated_at) VALUES ($1, $2, NOW())
-        ON CONFLICT (session_id) DO UPDATE SET llm_messages = $2, updated_at = NOW()
-    """, session_id, json.dumps(result["messages"]["llm"]))
+        INSERT INTO sessions (session_id, history, updated_at) VALUES ($1, $2, NOW())
+        ON CONFLICT (session_id) DO UPDATE SET history = $2, updated_at = NOW()
+    """, session_id, json.dumps(result["history"]))
 
     await db.executemany(
         "INSERT INTO messages (session_id, data) VALUES ($1, $2)",
-        [(session_id, json.dumps(msg)) for msg in result["messages"]["ui"]]
+        [(session_id, json.dumps(evt)) for evt in result["events"]]
     )
 
     return {"response": result["output"]}
@@ -795,11 +795,11 @@ async def chat(session_id: str, message: str):
 
 #### Production Tips
 
-- **Limit conversation length** — The `llm_messages` list grows with every turn. Truncate old messages to control token usage:
+- **Limit conversation length** — The `history` list grows with every turn. Truncate old messages to control token usage:
   ```python
   MAX_MESSAGES = 40
-  if len(llm_messages) > MAX_MESSAGES:
-      llm_messages = llm_messages[-MAX_MESSAGES:]
+  if len(history) > MAX_MESSAGES:
+      history = history[-MAX_MESSAGES:]
   ```
 - **Session expiry** — Use Redis TTL or a scheduled cleanup job to remove abandoned sessions.
 - **Concurrency** — If a session can receive concurrent requests, use a distributed lock to prevent race conditions.
@@ -819,10 +819,8 @@ result = {
         "output_tokens": 8,
         "total_tokens": 33
     },
-    "messages": {
-        "llm": [...],  # Full conversation history — overwrite in DB, pass to next process()
-        "ui": [...]    # Current turn only — append to DB, display in chat UI
-    },
+    "history": [...],   # Full conversation history — overwrite in DB, pass to next process()
+    "events": [...],    # Current turn only — append to DB, display in chat UI
     "metadata": {}
 }
 ```
@@ -1014,7 +1012,7 @@ For input validation errors raised before any API call (e.g., `InvalidInputError
 | `InvalidInputError`             | `input` is not a string                             | `None`   |
 | `InvalidSessionError`           | `session` is empty or not a string                  | `None`   |
 | `InvalidMetadataError`          | `metadata` is not a dict                            | `None`   |
-| `InvalidLlmMessagesError`       | `llm_messages` is not a list                        | `None`   |
+| `InvalidHistoryError`       | `history` is not a list                        | `None`   |
 | `InvalidInstructionParamsError` | `instruction_params` is not a dict                  | `None`   |
 | `InstructionKeyError`           | Missing placeholder key (only if `strict_instruction_params`) | `None` |
 | `ClientError`                   | OpenAI API returned an error                        | `dict`   |
@@ -1122,7 +1120,55 @@ class Config:
     max_steps = 5         # Limit runaway loops
 ```
 
-### 6. Customize Message Storage (Token Optimization)
+### 6. Inspect Agent Definitions
+
+Use `get_definition()` to see exactly what pyaiagent auto-generated from your class — the instruction, merged config, and tool schemas as they will be sent to OpenAI:
+
+```python
+import json
+
+class MyAgent(OpenAIAgent):
+    """You are a helpful assistant for {user_name}."""
+
+    class Config:
+        model = "gpt-4o"
+        temperature = 0.5
+
+    async def search(self, query: str, limit: int = 10) -> dict:
+        """Search the web for information."""
+        ...
+
+print(json.dumps(MyAgent.get_definition(), indent=2))
+```
+
+This returns:
+
+```json
+{
+  "agent_name": "MyAgent",
+  "instruction": "You are a helpful assistant for {user_name}.",
+  "config": {
+    "model": "gpt-4o",
+    "temperature": 0.5
+  },
+  "tools": {
+    "search": {
+      "type": "function",
+      "name": "search",
+      "description": "Search the web for information.",
+      "parameters": { "..." : "..." },
+      "strict": true
+    }
+  }
+}
+```
+
+This is a classmethod — call it on the class, not an instance. Useful for:
+- **Debugging** — verify the instruction text, config values, and tool schemas are correct
+- **CI/CD** — snapshot test your agent definitions to catch unintended changes
+- **Documentation** — auto-generate tool docs from the schemas
+
+### 7. Customize Message Storage (Token Optimization)
 
 When using structured outputs with large fields, you can reduce token usage by customizing what gets stored in conversation memory:
 
@@ -1140,20 +1186,20 @@ class MyAgent(OpenAIAgent):
     class Config:
         text_format = MyOutput
 
-    def format_llm_message(self, response) -> str:
+    def format_history(self, response) -> str:
         # Only store agent_response in LLM memory (saves tokens!)
         if response.output_parsed:
             return response.output_parsed.agent_response
         return response.output_text or ""
 
-    def format_ui_message(self, response) -> str:
+    def format_event(self, response) -> str:
         # Clean, user-friendly view for UI (not raw JSON!)
         if response.output_parsed:
             return response.output_parsed.agent_response
         return response.output_text or ""
 ```
 
-Both hooks can return the same clean content, or `format_ui_message` can include additional context for display (like timestamps, metadata summaries, etc.) while keeping `format_llm_message` minimal for token efficiency.
+Both hooks can return the same clean content, or `format_event` can include additional context for display (like timestamps, metadata summaries, etc.) while keeping `format_history` minimal for token efficiency.
 
 **Token savings example:**
 
@@ -1185,8 +1231,9 @@ Base class for all agents.
 |------------------------|------------------------------------------------|
 | `async process(...)`   | Process a user input                           |
 | `async aclose()`       | Close the agent and release resources          |
-| `format_llm_message()` | Override to customize LLM message content      |
-| `format_ui_message()`  | Override to customize UI message content       |
+| `get_definition()`     | Inspect the auto-generated agent definition (classmethod) |
+| `format_history()` | Override to customize LLM message content      |
+| `format_event()`       | Override to customize event content             |
 | `async __aenter__()`   | Context manager entry                          |
 | `async __aexit__(...)`| Context manager exit                           |
 
@@ -1240,6 +1287,25 @@ await shutdown()
 - **Safe** to call multiple times
 - Use in server shutdown handlers (FastAPI lifespan, etc.)
 
+### `get_definition()`
+
+Inspect the auto-generated agent definition. Returns the instruction, config, and tool schemas exactly as they will be sent to OpenAI.
+
+```python
+definition = MyAgent.get_definition()
+```
+
+#### Return Value
+
+| Key           | Type   | Description                                    |
+|---------------|--------|------------------------------------------------|
+| `agent_name`  | `str`  | The resolved class name                        |
+| `instruction` | `str`  | The cleaned docstring (system prompt)          |
+| `config`      | `dict` | Merged config values from parent + child Config |
+| `tools`       | `dict` | Tool schemas keyed by tool name                |
+
+This is a **classmethod** — call it on the class (`MyAgent.get_definition()`), not on an instance.
+
 ### `process()`
 
 The main method to interact with your agent.
@@ -1248,7 +1314,7 @@ The main method to interact with your agent.
 result = await agent.process(
     input="Hello!",
     session="user-123",        # Optional
-    llm_messages=[...],        # Optional - for conversation memory
+    history=[...],        # Optional - for conversation memory
     instruction_params={...},  # Optional - for dynamic instructions
     metadata={...}             # Optional - custom data
 )
@@ -1260,7 +1326,7 @@ result = await agent.process(
 |----------------------|--------|----------|--------------------------------------------------------|
 | `input`              | `str`  | Yes      | The user's message to process                          |
 | `session`            | `str`  | No       | Session ID for tracking (default: auto-generated UUID) |
-| `llm_messages`       | `list` | No       | Previous messages for multi-turn conversations         |
+| `history`       | `list` | No       | Previous messages for multi-turn conversations         |
 | `instruction_params` | `dict` | No       | Values for `{placeholders}` in agent docstring         |
 | `metadata`           | `dict` | No       | Custom metadata passed through to response             |
 
@@ -1281,10 +1347,8 @@ Returns a dictionary with:
         "output_tokens": 42,
         "total_tokens": 67
     },
-    "messages": {
-        "llm": [...],                    # Full history — overwrite in DB, pass to next process()
-        "ui": [...]                      # Current turn only — append to DB, display in chat UI
-    },
+    "history": [...],                    # Full history — overwrite in DB, pass to next process()
+    "events": [...],                     # Current turn only — append to DB, display in chat UI
     "metadata": {}                       # Your custom metadata
 }
 ```
@@ -1298,8 +1362,8 @@ Returns a dictionary with:
 | `turn`          | `str`             | Unique ID for this conversation turn            |
 | `steps`         | `int`             | Number of LLM ↔ tool rounds                     |
 | `tokens`        | `dict`            | Token usage breakdown                           |
-| `messages.llm`  | `list`            | Full accumulated conversation history — pass to next `process()` for memory, overwrite in DB per session |
-| `messages.ui`   | `list`            | Current turn messages only (enriched with `agent`, `session`, `turn`, `step`, `tokens`) — append to DB, display in UI |
+| `history`       | `list`            | Full accumulated conversation history — pass to next `process()` for memory, overwrite in DB per session |
+| `messages`      | `list`            | Current turn messages only (enriched with `agent`, `session`, `turn`, `step`, `tokens`) — append to DB, display in UI |
 | `metadata`      | `dict`            | Custom metadata passed through                  |
 
 ---

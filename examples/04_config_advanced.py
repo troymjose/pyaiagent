@@ -47,8 +47,8 @@ from pyaiagent import OpenAIAgent
 # │ llm_timeout             │ 120.0        │ Timeout for LLM response (seconds)        │
 # ├─────────────────────────┼──────────────┼───────────────────────────────────────────┤
 # │ text_format             │ None         │ Pydantic model for structured output      │
-# │ ui_messages_enabled     │ True         │ Include UI-formatted messages             │
-# │ llm_messages_enabled    │ True         │ Include LLM messages for memory           │
+# │ include_events          │ True         │ Include event records for UI/DB/analytics  │
+# │ include_history    │ True         │ Include LLM messages for memory           │
 # └─────────────────────────┴──────────────┴───────────────────────────────────────────┘
 
 

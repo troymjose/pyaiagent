@@ -7,12 +7,12 @@ can explode in token usage. The message formatting hooks let you control
 what gets stored — saving significant costs!
 
 What you'll learn:
-  • How `format_llm_message()` customizes LLM conversation memory
-  • How `format_ui_message()` customizes UI/frontend display
+  • How `format_history()` customizes LLM conversation memory
+  • How `format_event()` customizes UI/frontend display
   • Token optimization strategies for structured outputs
 
 Key concept:
-  Override `format_llm_message()` to store only essential content in
+  Override `format_history()` to store only essential content in
   conversation history. The large data stays in your app, not in every
   API call to OpenAI.
 
@@ -62,7 +62,7 @@ class UnoptimizedReportAgent(OpenAIAgent):
 # Example 2: The Solution — Optimized Message Formatting
 # =============================================================================
 #
-# By overriding format_llm_message(), we store only the summary in conversation
+# By overriding format_history(), we store only the summary in conversation
 # memory. The detailed_report is still returned to the caller but doesn't
 # bloat the conversation history.
 
@@ -76,7 +76,7 @@ class OptimizedReportAgent(OpenAIAgent):
         model = "gpt-4o-mini"
         text_format = ReportOutput
 
-    def format_llm_message(self, response) -> str:
+    def format_history(self, response) -> str:
         """
         Only store the summary in conversation memory.
         This dramatically reduces token usage for multi-turn conversations!
@@ -85,7 +85,7 @@ class OptimizedReportAgent(OpenAIAgent):
             return f"Summary: {response.output_parsed.summary}"
         return response.output_text or ""
 
-    def format_ui_message(self, response) -> str:
+    def format_event(self, response) -> str:
         """
         For UI, we might want to show a bit more context.
         """
@@ -123,7 +123,7 @@ class SmartChatBot(OpenAIAgent):
         model = "gpt-4o-mini"
         text_format = ChatResponse
 
-    def format_llm_message(self, response) -> str:
+    def format_history(self, response) -> str:
         """
         Only store the user-facing message in conversation history.
         Intent, confidence, and internal_notes are metadata — don't need them in memory.
@@ -132,7 +132,7 @@ class SmartChatBot(OpenAIAgent):
             return response.output_parsed.message
         return response.output_text or ""
 
-    def format_ui_message(self, response) -> str:
+    def format_event(self, response) -> str:
         """
         For UI/logging, include the message and suggested actions.
         """
@@ -169,9 +169,9 @@ async def compare_token_usage():
     print(f"Unoptimized - Tokens: {result_unopt['tokens']['total_tokens']}")
     print(f"Optimized   - Tokens: {result_opt['tokens']['total_tokens']}")
     
-    # Check what's stored in llm_messages
-    unopt_msg_len = len(str(result_unopt['messages']['llm']))
-    opt_msg_len = len(str(result_opt['messages']['llm']))
+    # Check what's stored in history
+    unopt_msg_len = len(str(result_unopt['history']))
+    opt_msg_len = len(str(result_opt['history']))
     
     print(f"\nMessage storage size:")
     print(f"Unoptimized - {unopt_msg_len} chars")
@@ -185,11 +185,11 @@ async def compare_token_usage():
     
     result_unopt2 = await unoptimized.process(
         input=followup, 
-        llm_messages=result_unopt['messages']['llm']
+        history=result_unopt['history']
     )
     result_opt2 = await optimized.process(
         input=followup, 
-        llm_messages=result_opt['messages']['llm']
+        history=result_opt['history']
     )
     
     print(f"Unoptimized - Turn 2 Tokens: {result_unopt2['tokens']['total_tokens']}")
@@ -211,7 +211,7 @@ async def chatbot_demo():
     print("=" * 60)
     
     bot = SmartChatBot()
-    llm_messages = None
+    history = None
     
     conversations = [
         "Hi, I need help with my order",
@@ -222,8 +222,8 @@ async def chatbot_demo():
     for user_input in conversations:
         print(f"\n👤 User: {user_input}")
         
-        result = await bot.process(input=user_input, llm_messages=llm_messages)
-        llm_messages = result['messages']['llm']
+        result = await bot.process(input=user_input, history=history)
+        history = result['history']
         
         # Show the structured response
         parsed = result['output_parsed']
@@ -232,7 +232,7 @@ async def chatbot_demo():
         print(f"   Suggestions: {', '.join(parsed.suggested_actions)}")
         
         # Show what's stored in memory (lean!)
-        last_assistant_msg = [m for m in llm_messages if m.get('role') == 'assistant'][-1]
+        last_assistant_msg = [m for m in history if m.get('role') == 'assistant'][-1]
         print(f"   [Memory stores: \"{last_assistant_msg['content'][:50]}...\"]")
 
 
@@ -249,10 +249,10 @@ async def main():
     print("=" * 60)
     print("""
 Key Takeaways:
-1. Override format_llm_message() to reduce token usage
+1. Override format_history() to reduce token usage
 2. Only store what's needed for conversation context
 3. Token savings compound with each turn
-4. format_ui_message() can be different for display purposes
+4. format_event() can be different for display purposes
 """)
 
 
@@ -273,8 +273,8 @@ if __name__ == "__main__":
 #    Store it in your database or return it to your frontend separately.
 #
 # 3. DIFFERENT HOOKS FOR DIFFERENT PURPOSES
-#    - format_llm_message(): What the AI needs for context (optimize for tokens)
-#    - format_ui_message(): What to show users/logs (optimize for clarity)
+#    - format_history(): What the AI needs for context (optimize for tokens)
+#    - format_event(): What to show users/logs (optimize for clarity)
 #
 # 4. TEST YOUR TOKEN USAGE
 #    Compare total_tokens across turns with and without optimization.

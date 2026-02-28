@@ -36,7 +36,7 @@ uvicorn examples.06_fastapi_basic:app --reload
 | File | Description | Key Concepts |
 |------|-------------|--------------|
 | [`00_basic_agent.py`](00_basic_agent.py) | Your first agent in 10 lines | `OpenAIAgent`, docstrings, `process()` |
-| [`01_conversation_memory.py`](01_conversation_memory.py) | Multi-turn conversations | `llm_messages`, chat loops |
+| [`01_conversation_memory.py`](01_conversation_memory.py) | Multi-turn conversations | `history`, chat loops |
 | [`02_tools_basic.py`](02_tools_basic.py) | Give agents superpowers | `async`/`sync` tools, type hints, docstrings |
 
 ### Intermediate Examples
@@ -61,7 +61,7 @@ uvicorn examples.06_fastapi_basic:app --reload
 |------|-------------|--------------|
 | [`09_inheritance_composition.py`](09_inheritance_composition.py) | Building agent hierarchies | Inheritance, tool reuse, routing |
 | [`10_context_manager.py`](10_context_manager.py) | Async context managers | `async with`, cleanup, pipelines |
-| [`11_message_formatting.py`](11_message_formatting.py) | Token optimization hooks | `format_llm_message`, `format_ui_message` |
+| [`11_message_formatting.py`](11_message_formatting.py) | Token optimization hooks | `format_history`, `format_event` |
 | [`12_dependency_injection.py`](12_dependency_injection.py) | Injecting services via `__init__` | DB clients, API clients, testing |
 | [`13_custom_client.py`](13_custom_client.py) | Custom OpenAI client configuration | `set_default_openai_client`, Azure, Ollama, proxies |
 | [`14_validation_retries.py`](14_validation_retries.py) | Auto-retry on structured output validation failure | `validation_retries`, `ValidationRetriesExhaustedError`, messages cleanup |
@@ -119,33 +119,33 @@ class StructuredAgent(OpenAIAgent):
 ### Conversation Memory
 
 ```python
-llm_messages = []
+history = []
 for user_input in messages:
     result = await agent.process(
         input=user_input,
-        llm_messages=llm_messages
+        history=history
     )
-    llm_messages = result["messages"]["llm"]
+    history = result["history"]
 ```
 
 **Two message lists, two purposes:**
 
-- `result["messages"]["llm"]` — Full accumulated conversation history. Pass to the next `process()` call for memory. In production, **overwrite** the session record each request. If validation retries occurred, retry artifacts are automatically cleaned — only the final valid response remains.
-- `result["messages"]["ui"]` — Current turn only (enriched with `agent`, `session`, `turn`, `step`, `tokens`). In production, **insert/append** to a messages collection each request. If validation retries occurred, all attempts (including failures) are preserved for debugging.
+- `result["history"]` — Full accumulated conversation history. Pass to the next `process()` call for memory. In production, **overwrite** the session record each request. If validation retries occurred, retry artifacts are automatically cleaned — only the final valid response remains.
+- `result["events"]` — Current turn only (enriched with `agent`, `session`, `turn`, `step`, `tokens`). In production, **insert/append** to an events collection each request. If validation retries occurred, all attempts (including failures) are preserved for debugging.
 
 **Production pattern (3 steps — load, process, save):**
 
 ```python
 @app.post("/chat")
 async def chat(session_id: str, message: str):
-    llm_messages = await db.load_session(session_id)        # 1. LOAD
+    history = await db.load_session(session_id)        # 1. LOAD
 
     result = await agent.process(                            # 2. PROCESS
-        input=message, session=session_id, llm_messages=llm_messages
+        input=message, session=session_id, history=history
     )
 
-    await db.save_session(session_id, result["messages"]["llm"])    # 3. SAVE (overwrite)
-    await db.insert_messages(session_id, result["messages"]["ui"])  #    (append)
+    await db.save_session(session_id, result["history"])    # 3. SAVE (overwrite)
+    await db.insert_events(session_id, result["events"])            #    (append)
     return {"response": result["output"]}
 ```
 
@@ -184,7 +184,7 @@ class MyAgent(OpenAIAgent):
     class Config:
         text_format = MyOutput  # Has large fields
 
-    def format_llm_message(self, response) -> str:
+    def format_history(self, response) -> str:
         # Only store essential content in memory
         if response.output_parsed:
             return response.output_parsed.summary  # Not the large data!

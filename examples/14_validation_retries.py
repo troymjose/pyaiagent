@@ -9,7 +9,7 @@ sending validation errors back to the LLM, giving it a chance to self-correct.
 What you'll learn:
   • How to add custom Pydantic validators to structured outputs
   • How `validation_retries` auto-retries with error feedback to the LLM
-  • How messages.llm stays clean while messages.ui shows the full retry history
+  • How history stays clean while events shows the full retry history
   • How to handle ValidationRetriesExhaustedError
   • How to disable retries (default) for manual retry handling
 
@@ -95,41 +95,41 @@ async def example_basic_retries() -> None:
 
 async def example_inspect_messages() -> None:
     """
-    Show how messages.llm is clean while messages.ui preserves retry history.
+    Show how history is clean while events preserves retry history.
 
     This is the key design:
-      - messages["llm"] is for the LLM — clean, no retry noise
-      - messages["ui"]  is for your app — full history with step numbers
+      - history is for the LLM — clean, no retry noise
+      - events is for your app — full history with step numbers
     """
     print("\n" + "=" * 60)
-    print("EXAMPLE 2: Messages After Retries (llm vs ui)")
+    print("EXAMPLE 2: After Retries (history vs events)")
     print("=" * 60 + "\n")
 
     agent = ReviewAgent()
     result = await agent.process(input="Review the movie The Matrix")
 
-    # messages.llm — Clean: only user input + final valid response
-    llm_messages = result["messages"]["llm"]
-    print(f"messages.llm count: {len(llm_messages)}")
-    for msg in llm_messages:
+    # history — Clean: only user input + final valid response
+    history = result["history"]
+    print(f"history count: {len(history)}")
+    for msg in history:
         role = msg.get("role", "unknown")
         content = str(msg.get("content", ""))[:60]
         print(f"  [{role}] {content}...")
 
     print()
 
-    # messages.ui — Full history: shows all attempts including failures
-    ui_messages = result["messages"]["ui"]
-    print(f"messages.ui count: {len(ui_messages)}")
-    for msg in ui_messages:
+    # events — Full history: shows all attempts including failures
+    events = result["events"]
+    print(f"events count: {len(events)}")
+    for msg in events:
         role = msg.get("role", "unknown")
         step = msg.get("step", "?")
         content = str(msg.get("content", ""))[:60]
         print(f"  [step {step}] [{role}] {content}...")
 
-    if len(ui_messages) > len(llm_messages):
-        print(f"\n  -> ui has more messages because it preserves failed attempts")
-        print(f"  -> llm is clean for passing to the next process() call")
+    if len(events) > len(history):
+        print(f"\n  -> events has more entries because it preserves failed attempts")
+        print(f"  -> history is clean for passing to the next process() call")
 
 
 # =============================================================================
@@ -309,7 +309,7 @@ if __name__ == "__main__":
 #                                        LLM gets error feedback to self-correct.
 #
 # Key message behavior:
-#   messages["llm"]  ->  Clean. Retry artifacts removed.
+#   history  ->  Clean. Retry artifacts removed.
 #                        Safe to pass to next process() call.
-#   messages["ui"]   ->  Full history. Shows all attempts with step numbers.
+#   events           ->  Full history. Shows all attempts with step numbers.
 #                        Insert into DB for debugging/analytics.

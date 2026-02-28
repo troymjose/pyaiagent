@@ -7,13 +7,13 @@ This example shows how to enable conversation history so the agent
 "remembers" what was said in previous messages.
 
 What you'll learn:
-  • How to pass conversation history using `llm_messages`
+  • How to pass conversation history using `history`
   • How the agent maintains context across multiple turns
   • Patterns for building chat applications
 
 Key concept:
-  Pass result["messages"]["llm"] from one call into the next call's
-  `llm_messages` parameter. That's all it takes!
+  Pass result["history"] from one call into the next call's
+  `history` parameter. That's all it takes!
 
 Prerequisites:
   pip install pyaiagent
@@ -73,7 +73,7 @@ async def example_basic_memory() -> None:
     print("You: What's my name and what are my hobbies?")
     result2 = await agent.process(
         input="What's my name and what are my hobbies?",
-        llm_messages=result1["messages"]["llm"]  # ← This enables memory!
+        history=result1["history"]  # ← This enables memory!
     )
     print(f"Agent: {result2['output']}\n")
 
@@ -84,7 +84,7 @@ async def example_basic_memory() -> None:
     print("You: Can you recommend a hiking trail for someone in my profession?")
     result3 = await agent.process(
         input="Can you recommend a hiking trail for someone in my profession?",
-        llm_messages=result2["messages"]["llm"]  # ← Updated messages!
+        history=result2["history"]  # ← Updated messages!
     )
     print(f"Agent: {result3['output']}\n")
 
@@ -96,7 +96,7 @@ async def example_basic_memory() -> None:
 async def example_chat_loop() -> None:
     """
     The recommended pattern for building a chat application.
-    Maintain a single `llm_messages` variable and update it after each turn.
+    Maintain a single `history` variable and update it after each turn.
     """
     print("\n" + "=" * 60)
     print("📝 EXAMPLE 2: Chat Loop Pattern (Programmatic)")
@@ -113,25 +113,25 @@ async def example_chat_loop() -> None:
     ]
 
     # Start with an empty list — no previous messages
-    llm_messages: list[dict[str, Any]] = []
+    history: list[dict[str, Any]] = []
 
     for user_message in user_messages:
         print(f"You: {user_message}")
 
         result = await agent.process(
             input=user_message,
-            llm_messages=llm_messages  # Pass current history
+            history=history  # Pass current history
         )
 
-        # IMPORTANT: Update llm_messages with the NEW conversation state
+        # IMPORTANT: Update history with the NEW conversation state
         # This includes the user message we just sent + the agent's response
-        llm_messages = result["messages"]["llm"]
+        history = result["history"]
 
         print(f"Agent: {result['output']}\n")
         print("─" * 40 + "\n")
 
     # Show final message count
-    print(f"📊 Total messages in conversation: {len(llm_messages)}")
+    print(f"📊 Total messages in conversation: {len(history)}")
 
 
 # =============================================================================
@@ -150,7 +150,7 @@ async def example_interactive_chat() -> None:
     print("Type 'quit' or 'exit' to end the conversation.\n")
 
     agent = ConversationalAssistant()
-    llm_messages: list[dict[str, Any]] = []
+    history: list[dict[str, Any]] = []
 
     while True:
         # Get user input
@@ -170,11 +170,11 @@ async def example_interactive_chat() -> None:
         # Process the message with conversation history
         result = await agent.process(
             input=user_input,
-            llm_messages=llm_messages
+            history=history
         )
 
         # Update the conversation history
-        llm_messages = result["messages"]["llm"]
+        history = result["history"]
 
         print(f"Agent: {result['output']}\n")
 
@@ -201,15 +201,15 @@ if __name__ == "__main__":
 # =============================================================================
 #
 # 1. STORE MESSAGES EXTERNALLY
-#    For real apps, store llm_messages in Redis, a database, or session storage.
+#    For real apps, store history in Redis, a database, or session storage.
 #    The in-memory approach shown here is for demonstration only.
 #
 # 2. LIMIT CONVERSATION LENGTH
 #    Long conversations use more tokens. Consider truncating old messages:
 #
 #      MAX_MESSAGES = 20
-#      if len(llm_messages) > MAX_MESSAGES:
-#          llm_messages = llm_messages[-MAX_MESSAGES:]
+#      if len(history) > MAX_MESSAGES:
+#          history = history[-MAX_MESSAGES:]
 #
 # 3. USE SESSION IDs
 #    Track conversations with the optional `session` parameter:
@@ -217,7 +217,7 @@ if __name__ == "__main__":
 #      result = await agent.process(
 #          input=user_message,
 #          session="user-123-conversation-456",
-#          llm_messages=llm_messages
+#          history=history
 #      )
 #
 # 4. SEE THE FASTAPI EXAMPLE

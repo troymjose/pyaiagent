@@ -37,7 +37,7 @@ from pyaiagent import (
     InvalidInputError,
     InvalidSessionError,
     InvalidMetadataError,
-    InvalidLlmMessagesError,
+    InvalidHistoryError,
     InvalidInstructionParamsError,
     InstructionKeyError,
     ClientError,
@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 # │ InvalidInputError              │ `input` is not a string                       │
 # │ InvalidSessionError            │ `session` is empty or not a string            │
 # │ InvalidMetadataError           │ `metadata` is not a dict                      │
-# │ InvalidLlmMessagesError        │ `llm_messages` is not a list                  │
+# │ InvalidHistoryError        │ `history` is not a list                  │
 # │ InvalidInstructionParamsError  │ `instruction_params` is not a dict            │
 # │ InstructionKeyError            │ Missing key (only if strict_instruction_params) │
 # │ ClientError                    │ OpenAI API error (network, auth, rate limit)  │
@@ -167,7 +167,7 @@ async def example_validation_errors() -> None:
         ("Invalid session type (int)", {"input": "Hi", "session": 123}),
         ("Empty session string", {"input": "Hi", "session": "   "}),
         ("Invalid metadata type", {"input": "Hi", "metadata": "not-a-dict"}),
-        ("Invalid llm_messages type", {"input": "Hi", "llm_messages": "not-a-list"}),
+        ("Invalid history type", {"input": "Hi", "history": "not-a-list"}),
     ]
 
     for test_name, kwargs in test_cases:
@@ -179,7 +179,7 @@ async def example_validation_errors() -> None:
             InvalidInputError,
             InvalidSessionError,
             InvalidMetadataError,
-            InvalidLlmMessagesError
+            InvalidHistoryError
         ) as e:
             print(f"   ✅ Caught: {type(e).__name__}\n")
 
